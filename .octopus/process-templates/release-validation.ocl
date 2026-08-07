@@ -43,6 +43,17 @@ parameter "ReleaseValidation.VersionShaPattern" {
     value "sha-\\K[0-9a-f]{7,40}" {}
 }
 
+parameter "ReleaseValidation.ExecutionContainerImage" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Image to use for the Execution Container (default is Ubuntu worker tools)"
+    is_optional = true
+    label = "Execution Container Image"
+
+    value "octopusdeploy/worker-tools:6-ubuntu.24.04" {}
+}
+
 step "validate-release" {
     name = "Validate Release"
 
@@ -386,6 +397,7 @@ step "validate-release" {
 
         packages "ReleaseValidation.PackageReference" {
             acquisition_location = "NotAcquired"
+            feed = "octopus-server-built-in"
             package_id = ""
             properties = {
                 Extract = "True"
