@@ -78,8 +78,12 @@ step "validate-release" {
                 # Variables
                 # ---------------------------------------------------------------------------
                 # Read through `gate_var`, which prefixes each name with VAR_PREFIX (default
-                # `Template.Gate.`). Override VAR_PREFIX via `Gate.VariablePrefix` if the
+                # `ReleaseValidation.`). Override VAR_PREFIX via `Gate.VariablePrefix` if the
                 # template's parameters are namespaced differently.
+                #
+                # Note: this step must be configured with **Syntax: Bash**. Octopus inline
+                # script steps default to PowerShell, which fails at parse time on the first
+                # shell function definition below — not near anything actually wrong.
                 #
                 # Required:
                 #   PackageReference     The package reference *name* as declared on THIS step
@@ -141,7 +145,11 @@ step "validate-release" {
                   echo "${value:-${2:-}}"
                 }
                 
-                PACKAGE_REF="$(gate_var PackageReference)"
+                # The package reference *name* is fixed by the template that declares it, so
+                # it defaults to "<prefix>PackageReference" — the name the template uses —
+                # rather than requiring a variable that just restates it. Override only if the
+                # template names its package reference something else.
+                PACKAGE_REF="$(gate_var PackageReference "${VAR_PREFIX}PackageReference")"
                 REPO="$(gate_var Repository)"
                 MAX_COMMITS="$(gate_var MaxCommits 3)"
                 REQUIRE_PR="$(gate_var RequirePullRequest false)"
@@ -161,8 +169,30 @@ step "validate-release" {
                 echo "GitHub auth         : $( [ -n "$GITHUB_TOKEN" ] && echo "token supplied" || echo "unauthenticated (~60 req/hour per IP)" )"
                 
                 if [ -z "$PACKAGE_REF" ]; then
-                  write_highlight "**Failing safe** — \`${VAR_PREFIX}PackageReference\` is not set, so there's no package to inspect."
+                  write_highlight "**Failing safe** — no package reference name resolved, so there's no package to inspect."
                   exit 1
+                fi
+                
+                # Catch a Repository value that was set but isn't a repository — most often an
+                # unresolved or mispasted Octopus variable. Without this the bad value lands in
+                # an API path and comes back as an opaque request failure.
+                if [ -n "$REPO" ]; then
+                  case "$REPO" in
+                    *'#{'*)
+                      write_highlight "**Failing safe** — \`${VAR_PREFIX}Repository\` contains an unresolved Octopus variable: \`${REPO}\`."
+                      echo "It should be a plain 'owner/name', e.g. creid-octopus/demo-kubernetes-krane."
+                      exit 1
+                      ;;
+                  esac
+                  # Tolerate a full GitHub URL here too, rather than only on the derived path.
+                  REPO=$(echo "$REPO" \
+                    | sed -E 's#^(https?://)?(www\.)?github\.com/##; s#\.git$##; s#/+$##')
+                  if ! echo "$REPO" | grep -qE '^[^/[:space:]]+/[^/[:space:]]+$'; then
+                    write_highlight "**Failing safe** — \`${VAR_PREFIX}Repository\` isn't an \`owner/name\` repository: \`${REPO}\`."
+                    echo "Expected something like creid-octopus/demo-kubernetes-krane, or leave it"
+                    echo "unset to derive it from the image's org.opencontainers.image.source label."
+                    exit 1
+                  fi
                 fi
                 
                 if ! echo "$MAX_COMMITS" | grep -qE '^[0-9]+$' || [ "$MAX_COMMITS" -lt 1 ]; then
