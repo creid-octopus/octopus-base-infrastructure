@@ -151,7 +151,7 @@ step "validate-release" {
                 # template names its package reference something else.
                 PACKAGE_REF="$(gate_var PackageReference "${VAR_PREFIX}PackageReference")"
                 REPO="$(gate_var Repository)"
-                MAX_COMMITS="$(gate_var MaxCommits 3)"
+                MAX_COMMITS="$(gate_var MaxCommits 12)"
                 REQUIRE_PR="$(gate_var RequirePullRequest false)"
                 POLL_TIMEOUT="$(gate_var CheckTimeoutSeconds 600)"
                 POLL_INTERVAL="$(gate_var CheckPollSeconds 60)"
