@@ -400,7 +400,7 @@ step "validate-release" {
             feed = "octopus-server-built-in"
             package_id = ""
             properties = {
-                Extract = "True"
+                Extract = "False"
                 PackageParameterName = "ReleaseValidation.Package"
                 SelectionMode = "deferred"
             }
