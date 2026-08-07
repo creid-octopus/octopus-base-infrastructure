@@ -386,7 +386,7 @@ step "validate-release" {
                 
                 EOT
             Octopus.Action.Script.ScriptSource = "Inline"
-            Octopus.Action.Script.Syntax = "PowerShell"
+            Octopus.Action.Script.Syntax = "Bash"
         }
         worker_pool_variable = "#{ReleaseValidation.WorkerPool}"
 
