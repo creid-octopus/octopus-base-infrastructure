@@ -1,5 +1,5 @@
 name = "Require Release Validation"
-description = "Check that a Process Template exists when deploying to production"
+description = "Check that the Release Validation process template is used"
 violation_action = "block"
 violation_reason = "A required process template is missing"
 
@@ -18,7 +18,7 @@ conditions {
             	step.Source.Type == "Process Template"
             
             	# Target a specific template by its unique slug or ID
-            	step.Source.SlugOrId == "<ProcessTemplate-slug>"
+            	step.Source.SlugOrId == "release-validation"
             
             	# Verify this specific step hasn't been added to the skipped list
             	not step.Id in input.SkippedSteps
@@ -30,16 +30,11 @@ scope {
     rego = <<-EOT
             package require_release_validation
             
-            default evaluate := true
+            default evaluate := false
             
-            # The following are examples of available scoping options:
-            # evaluate if {    
-            	# Scope evaluation by Environment name    
-            	# input.Environment.Name == "<environment-name>"    
-            	# Scope evaluation to Space Id    
-            	# input.Space.Id == "<space-id>"
-            	# Scope evaluation to multiple Spaces
-                # input.Project.Slug in ["<project-slug>", "<project-slug2>"]
-            # }
+            evaluate if {
+                    startswith(input.Project.Slug, "kubernetes-")
+                    not input.Runbook
+            }
             EOT
 }
