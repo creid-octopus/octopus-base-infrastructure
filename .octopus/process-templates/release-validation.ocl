@@ -1,0 +1,2 @@
+name = "Release Validation"
+description = "Common steps for validating release behavior - requires providing a package to validate against GitHub statuses."
