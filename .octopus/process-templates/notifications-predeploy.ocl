@@ -9,7 +9,7 @@ step "slack-deployment-starting" {
         properties = {
             Octopus.Action.Slack.ChannelIds = "C0BNWQXANAG"
             Octopus.Action.Slack.ChannelNames = "new-releases"
-            Octopus.Action.Slack.Message = "Deployment starting - <#{Octopus.Web.ServerUri}/#{Octopus.Web.DeploymentLink}|Follow deployment status here>\\n"
+            Octopus.Action.Slack.Message = "Deployment starting for <#{Octopus.Web.ServerUri}#{Octopus.Web.ProjectLink}|#{Octopus.Project.Name}> | <#{Octopus.Web.ServerUri}#{Octopus.Web.ReleaseLink}> - <#{Octopus.Web.ServerUri}#{Octopus.Web.DeploymentLink}|Follow deployment status here>\\n"
         }
     }
 }
