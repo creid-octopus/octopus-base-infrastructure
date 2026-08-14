@@ -1,2 +1,15 @@
 name = "Notifications - PreDeploy"
 description = "Standardized predeployment notification step(s)."
+
+step "slack-deployment-starting" {
+    name = "Slack - Deployment Starting"
+
+    action {
+        action_type = "Octopus.SendSlackMessage"
+        properties = {
+            Octopus.Action.Slack.ChannelIds = "C0BNWQXANAG"
+            Octopus.Action.Slack.ChannelNames = "new-releases"
+            Octopus.Action.Slack.Message = "Deployment starting - <#{Octopus.Web.ServerUri}/#{Octopus.Web.DeploymentLink}|Follow deployment status here>\\n"
+        }
+    }
+}
