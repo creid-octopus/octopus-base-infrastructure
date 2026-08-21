@@ -1,0 +1,7 @@
+name = "Default Project Wrapper"
+description = "Default project steps - pre and post deploy notifications, metadata management, etc."
+
+icon {
+    color = "#757575"
+    id = "layer-group"
+}
