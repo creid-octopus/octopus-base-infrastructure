@@ -1,0 +1,23 @@
+parameter "ArgoCD.Package" {
+    display_settings = {
+        Octopus.ControlType = "Package"
+    }
+    help_text = ""
+    label = "ArgoCD Package"
+}
+
+parameter "ArgoCD.PullRequestEnvironments" {
+    display_settings = {
+        Octopus.ControlType = "Environments"
+    }
+    help_text = ""
+    label = "Environments requiring Pull Requests for ArgoCD Updates"
+}
+
+parameter "ArgoCD.WorkerPool" {
+    display_settings = {
+        Octopus.ControlType = "WorkerPool"
+    }
+    help_text = ""
+    label = ""
+}
