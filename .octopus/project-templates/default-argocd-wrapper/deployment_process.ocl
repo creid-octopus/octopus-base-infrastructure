@@ -20,10 +20,6 @@ process_template "argocd-image-update" {
     parameter "ArgoCD.PullRequestEnvironments" {
         value = "#{PT.ArgoCD.RequiredPullRequestEnvironments}"
     }
-
-    parameter "ArgoCD.ContainerFeed" {
-        value = "#{PT.ArgoCD.ContainerFeed}"
-    }
 }
 
 process_template "slack-postdeploy" {
