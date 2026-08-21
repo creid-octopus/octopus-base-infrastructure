@@ -29,3 +29,13 @@ parameter "PT.ArgoCD.Package" {
     help_text = ""
     label = "ArgoCD Package"
 }
+
+parameter "PT.ArgoCD.HelmPathTemplate" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Helm Path Template (optional)"
+    label = ""
+
+    value "" {}
+}
