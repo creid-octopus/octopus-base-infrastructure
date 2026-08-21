@@ -1,0 +1,5 @@
+variable "PT.ArgoCD.HelmPathTemplate" {
+    value {
+        description = "Helm Path Template (optional)"
+    }
+}
