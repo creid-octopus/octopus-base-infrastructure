@@ -23,10 +23,11 @@ step "update-argo-cd-application-image-tags" {
 
         packages "PT.ArgoCD.Package" {
             acquisition_location = "NotAcquired"
+            feed = "octopus-server-built-in"
             package_id = ""
             properties = {
                 Extract = "false"
-                HelmReplacementPath = "#{if PT.ArgoCD.HelmPathTemplate}value_if_true#{/if}"
+                HelmReplacementPath = "#{if PT.ArgoCD.HelmImagePath}value_if_true#{/if}"
                 PackageParameterName = "PT.ArgoCD.Package"
                 Purpose = "DockerImageReference"
                 SelectionMode = "deferred"
