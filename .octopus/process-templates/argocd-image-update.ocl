@@ -30,14 +30,6 @@ parameter "ArgoCD.PullRequestEnvironments" {
     label = "Environments requiring pull request approval for ArgoCD Updates"
 }
 
-parameter "ArgoCD.ContainerFeed" {
-    display_settings = {
-        Octopus.ControlType = "Feed"
-    }
-    help_text = ""
-    label = ""
-}
-
 step "update-argo-cd-application-image-tags" {
     name = "Update Argo CD Application Image Tags"
 
