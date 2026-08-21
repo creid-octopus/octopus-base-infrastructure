@@ -3,7 +3,7 @@ parameter "PT.ArgoCD.Package" {
         Octopus.ControlType = "Package"
     }
     help_text = ""
-    label = ""
+    label = "PT.ArgoCD.Package"
 }
 
 parameter "PT.ArgoCD.RequiredPullRequestEnvironments" {
