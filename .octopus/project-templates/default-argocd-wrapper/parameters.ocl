@@ -1,11 +1,3 @@
-parameter "PackageParameter" {
-    display_settings = {
-        Octopus.ControlType = "Package"
-    }
-    help_text = ""
-    label = "PackageParameter"
-}
-
 parameter "PT.ArgoCD.RequiredPullRequestEnvironments" {
     display_settings = {
         Octopus.ControlType = "Environments"
