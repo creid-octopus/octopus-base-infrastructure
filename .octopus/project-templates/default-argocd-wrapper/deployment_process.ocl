@@ -12,6 +12,10 @@ process_template "argocd-image-update" {
     parameter "ArgoCD.WorkerPool" {
         value = "#{PT.ArgoCD.WorkerPool}"
     }
+
+    parameter "ArgoCD.PullRequestEnvironments" {
+        value = "#{PT.ArgoCD.RequiredPullRequestEnvironments}"
+    }
 }
 
 process_template "slack-postdeploy" {
