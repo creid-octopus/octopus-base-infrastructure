@@ -8,6 +8,11 @@ process_template "argocd-image-update" {
     name = "ArgoCD - Image Update"
     process_template_slug = "argocd-image-update"
     version_mask = "PreRelease"
+    parameters = {
+        "ArgoCD.Package" = "#{ArgoCD.Package}"
+        "ArgoCD.PullRequestEnvironments" = "#{ArgoCD.PullRequestEnvironments}"
+        "ArgoCD.WorkerPool" = "#{ArgoCD.WorkerPool}"
+    }
 }
 
 process_template "slack-postdeploy" {
