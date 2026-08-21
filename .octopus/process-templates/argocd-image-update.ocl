@@ -1,2 +1,61 @@
 name = "ArgoCD Image Update"
 description = ""
+
+icon {
+    color = "#C45317"
+    id = "dolly-flatbed"
+}
+
+parameter "ArgoCD.Package" {
+    display_settings = {
+        Octopus.ControlType = "Package"
+    }
+    help_text = ""
+    label = "ArgoCD Package"
+}
+
+parameter "ArgoCD.WorkerPool" {
+    display_settings = {
+        Octopus.ControlType = "WorkerPool"
+    }
+    help_text = ""
+    label = ""
+}
+
+parameter "ArgoCD.PullRequestEnvironments" {
+    display_settings = {
+        Octopus.ControlType = "Environments"
+    }
+    help_text = ""
+    label = "Environments requiring pull request approval for ArgoCD Updates"
+}
+
+step "update-argo-cd-application-image-tags" {
+    name = "Update Argo CD Application Image Tags"
+
+    action {
+        action_type = "Octopus.ArgoCDUpdateImageTags"
+        properties = {
+            Octopus.Action.ArgoCD.CommitMessageSummary = "Octopus Deploy updated image versions"
+            Octopus.Action.ArgoCD.CommitMethod = "PerEnvironment"
+            Octopus.Action.ArgoCD.PullRequest.EnvironmentsTemplateParameter = "#{ArgoCD.PullRequestEnvironments}"
+            Octopus.Action.ArgoCD.PushRetryAttempts = "2"
+            Octopus.Action.ArgoCD.StepVerification.Method = "ArgoCDApplicationHealthy"
+            Octopus.Action.ArgoCD.StepVerification.Timeout = "300"
+            Octopus.Action.ArgoCD.Sync.Mode = "AllEnvironments"
+        }
+        worker_pool_variable = "#{ArgoCD.WorkerPool}"
+
+        packages "ArgoCD.Package" {
+            acquisition_location = "NotAcquired"
+            package_id = ""
+            properties = {
+                Extract = "false"
+                HelmReplacementPath = "#{ArgoCD.Package.HelmImageTagPath}"
+                PackageParameterName = "ArgoCD.Package"
+                Purpose = "DockerImageReference"
+                SelectionMode = "deferred"
+            }
+        }
+    }
+}
