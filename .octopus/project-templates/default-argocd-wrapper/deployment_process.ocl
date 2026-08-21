@@ -1,0 +1,17 @@
+process_template "slack-predeploy" {
+    name = "Slack - PreDeploy"
+    process_template_slug = "notifications-predeploy"
+    version_mask = "PreRelease"
+}
+
+process_template "argocd-image-update" {
+    name = "ArgoCD - Image Update"
+    process_template_slug = "argocd-image-update"
+    version_mask = "PreRelease"
+}
+
+process_template "slack-postdeploy" {
+    name = "Slack - PostDeploy"
+    process_template_slug = "notifications-postdeploy"
+    version_mask = "PreRelease"
+}

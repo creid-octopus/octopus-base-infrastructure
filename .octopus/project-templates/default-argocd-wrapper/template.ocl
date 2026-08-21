@@ -1,0 +1,7 @@
+name = "Default ArgoCD Wrapper"
+description = "Default ArgoCD wrapper template - deployment notifications and image update steps included."
+
+icon {
+    color = "#757575"
+    id = "layer-group"
+}
