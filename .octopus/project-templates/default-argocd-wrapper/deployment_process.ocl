@@ -9,6 +9,10 @@ process_template "argocd-image-update" {
     process_template_slug = "argocd-image-update"
     version_mask = "PreRelease"
 
+    parameter "ArgoCD.Package" {
+        value = "#{PT.ArgoCD.Package}"
+    }
+
     parameter "ArgoCD.WorkerPool" {
         value = "#{PT.ArgoCD.WorkerPool}"
     }
