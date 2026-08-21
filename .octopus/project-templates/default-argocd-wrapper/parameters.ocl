@@ -36,6 +36,4 @@ parameter "PT.ArgoCD.HelmPathTemplate" {
     }
     help_text = "Helm Path Template (optional)"
     label = ""
-
-    value "" {}
 }
