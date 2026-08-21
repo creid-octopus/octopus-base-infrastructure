@@ -13,3 +13,19 @@ parameter "PT.ArgoCD.WorkerPool" {
     help_text = ""
     label = ""
 }
+
+parameter "PT.ArgoCD.ContainerFeed" {
+    display_settings = {
+        Octopus.ControlType = "Feed"
+    }
+    help_text = ""
+    label = "Container Feed"
+}
+
+parameter "PT.ArgoCD.Package" {
+    display_settings = {
+        Octopus.ControlType = "Package"
+    }
+    help_text = ""
+    label = "ArgoCD Package"
+}
