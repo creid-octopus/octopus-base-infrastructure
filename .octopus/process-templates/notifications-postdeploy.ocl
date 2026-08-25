@@ -1,6 +1,39 @@
 name = "Notifications - PostDeploy"
 description = "Standardized postdeployment notification step(s)."
 
+parameter "Slack.PostDeploy.ProjectLink" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    is_optional = true
+    label = ""
+
+    value "<#{Octopus.Web.ServerUri}#{Octopus.Web.ProjectLink}|#{Octopus.Project.Name}>" {}
+}
+
+parameter "Slack.PostDeploy.ReleaseLink" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    is_optional = true
+    label = ""
+
+    value "<#{Octopus.Web.ServerUri}#{Octopus.Web.ReleaseLink}|#{Octopus.Release.Number}>" {}
+}
+
+parameter "Slack.PostDeploy.DeplymentLink" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    is_optional = true
+    label = ""
+
+    value "<#{Octopus.Web.ServerUri}#{Octopus.Web.DeploymentLink}|#{Octopus.Deployment.Id}>" {}
+}
+
 step "slack-deployment-complete" {
     name = "Slack - Deployment Complete"
 
