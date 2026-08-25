@@ -10,9 +10,10 @@ step "slack-deployment-starting" {
             Octopus.Action.Slack.ChannelIds = "C0BNWQXANAG"
             Octopus.Action.Slack.ChannelNames = "new-releases"
             Octopus.Action.Slack.Message = <<-EOT
-                :construction:Deployment starting: 
-                 <#{Octopus.Web.ServerUri}#{Octopus.Web.ProjectLink}|#{Octopus.Project.Name}> | <#{Octopus.Web.ServerUri}#{Octopus.Web.ReleaseLink}|#{Octopus.Release.Number}>
-                <#{Octopus.Web.ServerUri}#{Octopus.Web.DeploymentLink}|Follow deployment status here>
+                :construction:Deployment starting for  
+                 <#{Octopus.Web.ServerUri}#{Octopus.Web.ProjectLink}|#{Octopus.Project.Name}> to #{Octopus.Environment.Name} 
+                
+                <#{Octopus.Web.ServerUri}#{Octopus.Web.ReleaseLink}|#{Octopus.Release.Number}> | <#{Octopus.Web.ServerUri}#{Octopus.Web.DeploymentLink}|Follow deployment status here>
                 EOT
         }
     }
