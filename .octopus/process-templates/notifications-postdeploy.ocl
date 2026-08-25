@@ -44,9 +44,9 @@ step "slack-deployment-complete" {
             Octopus.Action.Slack.ChannelNames = "new-releases"
             Octopus.Action.Slack.Message = <<-EOT
                 :white_check_mark: Deployment complete for  
-                 <#{Octopus.Web.ServerUri}#{Octopus.Web.ProjectLink}|#{Octopus.Project.Name}> to #{Octopus.Environment.Name} 
+                 #{Slack.PostDeploy.ProjectLink} to #{Octopus.Environment.Name} 
                 
-                <#{Octopus.Web.ServerUri}#{Octopus.Web.ReleaseLink}|#{Octopus.Release.Number}> | <#{Octopus.Web.ServerUri}#{Octopus.Web.DeploymentLink}|#{Octopus.Deployment.Id}>
+                #{Slack.PostDeploy.ReleaseLink} | #{Slack.PostDeploy.DeplymentLink}
                 EOT
         }
     }
