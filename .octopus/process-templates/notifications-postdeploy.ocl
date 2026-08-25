@@ -13,7 +13,7 @@ step "slack-deployment-complete" {
                 :white_check_mark: Deployment complete for  
                  <#{Octopus.Web.ServerUri}#{Octopus.Web.ProjectLink}|#{Octopus.Project.Name}> to #{Octopus.Environment.Name} 
                 
-                <#{Octopus.Web.ServerUri}#{Octopus.Web.ReleaseLink}|#{Octopus.Release.Number}> to #{Octopus.Environment.Name} (<#{Octopus.Web.ServerUri}#{Octopus.Web.DeploymentLink}|#{Octopus.Deployment.Id)>)
+                <#{Octopus.Web.ServerUri}#{Octopus.Web.ReleaseLink}|#{Octopus.Release.Number}> to #{Octopus.Environment.Name} (<#{Octopus.Web.ServerUri}#{Octopus.Web.DeploymentLink}|#{Octopus.Deployment.Id}>)
                 EOT
         }
     }
