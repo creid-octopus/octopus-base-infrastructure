@@ -33,7 +33,7 @@ scope {
             default evaluate := false
             
             evaluate if {
-                    startswith(input.Project.Slug, "aws-")
+                    startswith(input.Project.Slug, "kubernetes-")
                     not input.Runbook
             }
             EOT
