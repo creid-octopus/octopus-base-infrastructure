@@ -1,6 +1,15 @@
 name = "Notifications - PreDeploy"
 description = "Standardized predeployment notification step(s)."
 
+parameter "Parameters.CustomMessage" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    is_optional = true
+    label = ""
+}
+
 step "slack-deployment-starting" {
     name = "Slack - Deployment Starting"
 
@@ -14,6 +23,8 @@ step "slack-deployment-starting" {
                  <#{Octopus.Web.ServerUri}#{Octopus.Web.ProjectLink}|#{Octopus.Project.Name}> to #{Octopus.Environment.Name} 
                 
                 <#{Octopus.Web.ServerUri}#{Octopus.Web.ReleaseLink}|#{Octopus.Release.Number}> | <#{Octopus.Web.ServerUri}#{Octopus.Web.DeploymentLink}|Follow deployment status here>
+                
+                Custom: #{Parameters.CustomMessage}
                 EOT
         }
     }
