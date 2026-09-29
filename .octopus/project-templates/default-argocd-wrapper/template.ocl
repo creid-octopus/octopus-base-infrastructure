@@ -1,5 +1,5 @@
-name = "Golden Path Kubernetes Template"
-description = "Default Kubernetes wrapper template - notifications and deployment steps included."
+name = "Default ArgoCD Wrapper"
+description = "Default ArgoCD wrapper template - notifications and image update steps included."
 
 icon {
     color = "#927002"
