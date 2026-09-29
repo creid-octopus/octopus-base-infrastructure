@@ -23,7 +23,7 @@ parameter "Slack.PostDeploy.ReleaseLink" {
     value "<#{Octopus.Web.ServerUri}#{Octopus.Web.ReleaseLink}|#{Octopus.Release.Number}>" {}
 }
 
-parameter "Slack.PostDeploy.DeplymentLink" {
+parameter "Slack.PostDeploy.DeploymentLink" {
     display_settings = {
         Octopus.ControlType = "SingleLineText"
     }
@@ -55,7 +55,7 @@ step "slack-deployment-complete" {
                 :white_check_mark: Deployment complete for  
                  #{Slack.PostDeploy.ProjectLink} to #{Octopus.Environment.Name} 
                 
-                #{Slack.PostDeploy.ReleaseLink} | #{Slack.PostDeploy.DeplymentLink}
+                #{Slack.PostDeploy.ReleaseLink} | #{Slack.PostDeploy.DeploymentLink}
                 
                 #{if Parameters.CustomMessage}
                 Custom: #{Parameters.CustomMessage}
