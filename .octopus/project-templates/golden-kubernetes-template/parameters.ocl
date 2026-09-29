@@ -14,42 +14,6 @@ parameter "Kubernetes.DefaultChannel" {
     label = "Default Channel"
 }
 
-parameter "Kubernetes.TargetTags" {
-    display_settings = {
-        Octopus.ControlType = "TargetTags"
-    }
-    help_text = ""
-    label = "Target Tag"
-}
-
-parameter "Kubernetes.Notification.PreDeployMessage" {
-    display_settings = {
-        Octopus.ControlType = "SingleLineText"
-    }
-    help_text = ""
-    label = "Custom Pre-Deploy Message"
-
-    value "PreDeploy-GoldenTemplate" {}
-}
-
-parameter "Kubernetes.Notifications.PostDeployMessage" {
-    display_settings = {
-        Octopus.ControlType = "SingleLineText"
-    }
-    help_text = ""
-    label = "Custom PostDeploy Message"
-
-    value "PostDeploy-GoldenTemplate" {}
-}
-
-parameter "Kubernetes.WorkerPool" {
-    display_settings = {
-        Octopus.ControlType = "WorkerPool"
-    }
-    help_text = ""
-    label = "Worker Pool"
-}
-
 parameter "Kubernetes.YAML.GitRepositoryUrl" {
     display_settings = {
         Octopus.ControlType = "SingleLineText"
@@ -72,4 +36,40 @@ parameter "Kubernetes.YAML.GitRepositoryFilePath" {
     }
     help_text = ""
     label = "YAML File Path"
+}
+
+parameter "Kubernetes.Notification.PreDeployMessage" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    label = "Custom Pre-Deploy Message"
+
+    value "PreDeploy-GoldenTemplate" {}
+}
+
+parameter "Kubernetes.Notifications.PostDeployMessage" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    label = "Custom PostDeploy Message"
+
+    value "PostDeploy-GoldenTemplate" {}
+}
+
+parameter "Kubernetes.TargetTags" {
+    display_settings = {
+        Octopus.ControlType = "TargetTags"
+    }
+    help_text = ""
+    label = "Target Tag"
+}
+
+parameter "Kubernetes.WorkerPool" {
+    display_settings = {
+        Octopus.ControlType = "WorkerPool"
+    }
+    help_text = ""
+    label = "Worker Pool"
 }
