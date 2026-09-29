@@ -4,6 +4,4 @@ parameter "Kubectl.CreateNamespace.Name" {
     }
     help_text = "Creates the deployment namespace on the cluster if it doesn't already exist."
     label = "Namespace for deployment (created if not exists)"
-
-    value "" {}
 }
