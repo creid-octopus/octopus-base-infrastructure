@@ -21,3 +21,19 @@ parameter "Kubernetes.TargetTags" {
     help_text = ""
     label = "Target Tag"
 }
+
+parameter "Kubernetes.Notification.PreDeployMessage" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    label = "Custom Pre-Deploy Message"
+}
+
+parameter "Kubernetes.Notifications.PostDeployMessage" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    label = "Custom PostDeploy Message"
+}
