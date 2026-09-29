@@ -1,0 +1,7 @@
+parameter "Kubernetes.DefaultChannel" {
+    display_settings = {
+        Octopus.ControlType = "Channels"
+    }
+    help_text = ""
+    label = "Default Channel"
+}
