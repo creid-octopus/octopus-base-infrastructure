@@ -2,6 +2,6 @@ name = "Default ArgoCD Wrapper"
 description = "Default ArgoCD wrapper template - notifications and image update steps included."
 
 icon {
-    color = "#927002"
-    id = "dharmachakra"
+    color = "#C45317"
+    id = "octopus-deploy"
 }
