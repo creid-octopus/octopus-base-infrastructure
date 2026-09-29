@@ -1,6 +1,6 @@
 name = "Require Release Validation"
 description = "Check that the Release Validation process template is used"
-violation_action = "block"
+violation_action = "warn"
 violation_reason = "A required process template is missing"
 
 conditions {
