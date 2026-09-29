@@ -1,0 +1,29 @@
+process_template "notification-predeploy" {
+    name = "Notification - PreDeploy"
+    process_template_slug = "notifications-predeploy"
+    version_mask = "PreRelease"
+
+    parameter "Parameters.CustomMessage" {
+        value = "#{Kubernetes.Notification.PreDeployMessage}"
+    }
+}
+
+process_template "create-namespace" {
+    name = "Create Namespace"
+    process_template_slug = "kubectl-create-namespace"
+    version_mask = "PreRelease"
+
+    parameter "Kubectl.CreateNamespace.TargetTag" {
+        value = "#{Kubernetes.TargetTags}"
+    }
+
+    parameter "Kubectl.CreateNamespace.Name" {
+        value = "#{Kubernetes.TargetNamespace}"
+    }
+}
+
+process_template "notification-postdeploy" {
+    name = "Notification - PostDeploy"
+    process_template_slug = "notifications-postdeploy"
+    version_mask = "PreRelease"
+}
