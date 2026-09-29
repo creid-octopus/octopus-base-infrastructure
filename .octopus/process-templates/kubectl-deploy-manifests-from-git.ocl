@@ -1,2 +1,87 @@
-name = "kubectl - Deploy Manifests From Git"
+name = "Kubernetes - Deploy YAML"
 description = "Deploy manifests from a specified repository"
+
+icon {
+    color = "#557999"
+    id = "files-medical"
+}
+
+parameter "KubernetesYaml.NamespaceTarget" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    label = "Deployment Namespace"
+}
+
+parameter "KubernetesYaml.GitRepositoryUrl" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    label = "Git Repository URL"
+}
+
+parameter "KubernetesYaml.GitRepositoryBranch" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    label = "Git Repository Branch"
+
+    value "main" {}
+}
+
+parameter "KuberenetesYaml.GitRepositoryFilePath" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    label = "Manifest File Path"
+}
+
+parameter "KubernetesYaml.TargetTag" {
+    display_settings = {
+        Octopus.ControlType = "TargetTags"
+    }
+    help_text = ""
+    label = "Target Tag"
+}
+
+parameter "KubernetesYaml.WorkerPool" {
+    display_settings = {
+        Octopus.ControlType = "WorkerPool"
+    }
+    help_text = ""
+    label = "Worker Pool"
+}
+
+step "deploy-yaml" {
+    name = "Deploy YAML"
+    properties = {
+        Octopus.Action.TargetRoles = "#{KubernetesYaml.TargetTag}"
+    }
+
+    action {
+        action_type = "Octopus.KubernetesDeployRawYaml"
+        properties = {
+            Octopus.Action.GitRepository.Source = "External"
+            Octopus.Action.Kubernetes.DeploymentTimeout = "180"
+            Octopus.Action.Kubernetes.ResourceStatusCheck = "True"
+            Octopus.Action.Kubernetes.ServerSideApply.Enabled = "True"
+            Octopus.Action.Kubernetes.ServerSideApply.ForceConflicts = "True"
+            Octopus.Action.KubernetesContainers.CustomResourceYamlFileName = "#{KuberenetesYaml.GitRepositoryFilePath}"
+            Octopus.Action.KubernetesContainers.Namespace = "#{KubernetesYaml.NamespaceTarget}"
+            Octopus.Action.Script.ScriptSource = "GitRepository"
+        }
+        worker_pool_variable = "#{KubernetesYaml.WorkerPool}"
+
+        git_dependencies {
+            default_branch = "#{KubernetesYaml.GitRepositoryBranch}"
+            file_path_filters = ["#{KuberenetesYaml.GitRepositoryFilePath}"]
+            git_credential_id = "GitCredentials-61"
+            git_credential_type = "Library"
+            repository_uri = "#{KubernetesYaml.GitRepositoryUrl}"
+        }
+    }
+}
