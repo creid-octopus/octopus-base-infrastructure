@@ -1,2 +1,44 @@
 name = "kubectl - Create Namespace"
 description = "`kubectl` script - create namespace if not exists."
+
+parameter "Kubectl.CreateNamespace.Name" {
+    display_settings = {
+        Octopus.ControlType = "TargetTags"
+    }
+    help_text = "Creates the deployment namespace on the cluster if it doesn't already exist."
+    label = "Namespace for deployment (created if not exists)"
+}
+
+parameter "Kubectl.CreateNamespace.TargetTag" {
+    display_settings = {
+        Octopus.ControlType = "TargetTags"
+    }
+    help_text = "Defines deployment target tag for namespace creation."
+    label = "Kubernetes target tag for deployment"
+}
+
+parameter "Kubectl.CreateNamespace.WorkerPool" {
+    display_settings = {
+        Octopus.ControlType = "WorkerPool"
+    }
+    help_text = ""
+    label = "Worker Pool"
+}
+
+step "create-namespace" {
+    name = "Create Namespace"
+    properties = {
+        Octopus.Action.TargetRoles = "#{Kubectl.CreateNamespace.TargetTag}"
+    }
+
+    action {
+        action_type = "Octopus.KubernetesRunScript"
+        notes = "Creates the deployment namespace on the cluster if it doesn't already exist."
+        properties = {
+            Octopus.Action.Script.ScriptBody = "kubectl create namespace $(get_octopusvariable \"Kubectl.CreateNamespace.Name\")  --dry-run=client -o yaml | kubectl apply -f -"
+            Octopus.Action.Script.ScriptSource = "Inline"
+            Octopus.Action.Script.Syntax = "Bash"
+        }
+        worker_pool_variable = "#{Kubectl.CreateNamespace.WorkerPool}"
+    }
+}
