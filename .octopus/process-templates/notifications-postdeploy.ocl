@@ -34,6 +34,15 @@ parameter "Slack.PostDeploy.DeplymentLink" {
     value "<#{Octopus.Web.ServerUri}#{Octopus.Web.DeploymentLink}|#{Octopus.Deployment.Id}>" {}
 }
 
+parameter "Parameters.CustomMessage" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    is_optional = true
+    label = ""
+}
+
 step "slack-deployment-complete" {
     name = "Slack - Deployment Complete"
 
@@ -47,6 +56,10 @@ step "slack-deployment-complete" {
                  #{Slack.PostDeploy.ProjectLink} to #{Octopus.Environment.Name} 
                 
                 #{Slack.PostDeploy.ReleaseLink} | #{Slack.PostDeploy.DeplymentLink}
+                
+                #{if Parameters.CustomMessage}
+                Custom: #{Parameters.CustomMessage}
+                #{/if}
                 EOT
         }
     }
