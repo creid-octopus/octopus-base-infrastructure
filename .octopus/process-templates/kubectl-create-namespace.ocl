@@ -1,14 +1,6 @@
 name = "kubectl - Create Namespace"
 description = "`kubectl` script - create namespace if not exists."
 
-parameter "Kubectl.CreateNamespace.Name" {
-    display_settings = {
-        Octopus.ControlType = "TargetTags"
-    }
-    help_text = "Creates the deployment namespace on the cluster if it doesn't already exist."
-    label = "Namespace for deployment (created if not exists)"
-}
-
 parameter "Kubectl.CreateNamespace.TargetTag" {
     display_settings = {
         Octopus.ControlType = "TargetTags"
@@ -23,6 +15,14 @@ parameter "Kubectl.CreateNamespace.WorkerPool" {
     }
     help_text = ""
     label = "Worker Pool"
+}
+
+parameter "Kubectl.CreateNamespace.Name" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Namespace for deployment (created if not exists)"
+    label = "Namespace Name"
 }
 
 step "create-namespace" {
