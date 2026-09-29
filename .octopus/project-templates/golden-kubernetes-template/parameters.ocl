@@ -28,6 +28,8 @@ parameter "Kubernetes.Notification.PreDeployMessage" {
     }
     help_text = ""
     label = "Custom Pre-Deploy Message"
+
+    value "PreDeploy-GoldenTemplate" {}
 }
 
 parameter "Kubernetes.Notifications.PostDeployMessage" {
@@ -36,4 +38,6 @@ parameter "Kubernetes.Notifications.PostDeployMessage" {
     }
     help_text = ""
     label = "Custom PostDeploy Message"
+
+    value "PostDeploy-GoldenTemplate" {}
 }
