@@ -41,3 +41,35 @@ parameter "Kubernetes.Notifications.PostDeployMessage" {
 
     value "PostDeploy-GoldenTemplate" {}
 }
+
+parameter "Kubernetes.WorkerPool" {
+    display_settings = {
+        Octopus.ControlType = "WorkerPool"
+    }
+    help_text = ""
+    label = "Worker Pool"
+}
+
+parameter "Kubernetes.YAML.GitRepositoryUrl" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    label = "Git Repository URL"
+}
+
+parameter "Kubernetes.YAML.GitRepositoryBranch" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    label = "Git Repository Branch"
+}
+
+parameter "Kubernetes.YAML.GitRepositoryFilePath" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    label = "YAML File Path"
+}
