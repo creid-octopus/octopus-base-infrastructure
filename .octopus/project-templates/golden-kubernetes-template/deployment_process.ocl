@@ -22,6 +22,16 @@ process_template "create-namespace" {
     }
 }
 
+process_template "deploy-yaml" {
+    name = "Deploy YAML"
+    process_template_slug = "kubectl-deploy-manifests-from-git"
+    version_mask = "PreRelease"
+
+    parameter "KubernetesYaml.NamespaceTarget" {
+        value = "#{Kubernetes.TargetNamespace}"
+    }
+}
+
 process_template "notification-postdeploy" {
     name = "Notification - PostDeploy"
     process_template_slug = "notifications-postdeploy"
