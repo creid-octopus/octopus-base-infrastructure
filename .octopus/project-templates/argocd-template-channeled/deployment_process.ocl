@@ -1,0 +1,43 @@
+process_template "predeploy-notification" {
+    name = "PreDeploy Notification"
+    process_template_slug = "notifications-predeploy"
+    version_mask = "PreRelease"
+}
+
+step "update-argo-cd-application-image-tags" {
+    name = "Update Argo CD Application Image Tags"
+
+    action {
+        action_type = "Octopus.ArgoCDUpdateImageTags"
+        properties = {
+            Octopus.Action.ArgoCD.CommitMessageSummary = "Octopus Deploy updated image versions"
+            Octopus.Action.ArgoCD.CommitMethod = "PerEnvironment"
+            Octopus.Action.ArgoCD.CommitWhenStale = "False"
+            Octopus.Action.ArgoCD.PullRequest.EnvironmentsTemplateParameter = "#{ArgoCDTemplate.PullRequestEnvironments}"
+            Octopus.Action.ArgoCD.PushRetryAttempts = "2"
+            Octopus.Action.ArgoCD.StepVerification.Method = "ArgoCDApplicationHealthy"
+            Octopus.Action.ArgoCD.StepVerification.Timeout = "180"
+            Octopus.Action.ArgoCD.Sync.Mode = "AllEnvironments"
+        }
+        worker_pool_variable = "#{ArgoCDTemplate.WorkerPool}"
+
+        packages "ArgoCDTemplate.PackageParameter" {
+            acquisition_location = "NotAcquired"
+            feed = "ghcr-authenticated"
+            package_id = ""
+            properties = {
+                Extract = "False"
+                HelmReplacementPath = "#{ArgoCDTemplate.HelmImagePath}"
+                PackageParameterName = "ArgoCDTemplate.PackageParameter"
+                Purpose = "DockerImageReference"
+                SelectionMode = "deferred"
+            }
+        }
+    }
+}
+
+process_template "postdeploy-notification" {
+    name = "PostDeploy Notification"
+    process_template_slug = "notifications-postdeploy"
+    version_mask = "PreRelease"
+}
