@@ -10,6 +10,36 @@ parameter "Parameters.CustomMessage" {
     label = ""
 }
 
+parameter "Slack.PreDeploy.ProjectLink" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    label = ""
+
+    value "<#{Octopus.Web.ServerUri}#{Octopus.Web.ProjectLink}|#{Octopus.Project.Name}>" {}
+}
+
+parameter "Slack.PreDeploy.ReleaseLink" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    label = ""
+
+    value "<#{Octopus.Web.ServerUri}#{Octopus.Web.ReleaseLink}|#{Octopus.Release.Number}>" {}
+}
+
+parameter "Slack.PreDeploy.DeploymentLink" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    label = ""
+
+    value "<#{Octopus.Web.ServerUri}#{Octopus.Web.DeploymentLink}|#{Octopus.Deployment.Id}>" {}
+}
+
 step "slack-deployment-starting" {
     name = "Slack - Deployment Starting"
 
@@ -20,9 +50,9 @@ step "slack-deployment-starting" {
             Octopus.Action.Slack.ChannelNames = "new-releases"
             Octopus.Action.Slack.Message = <<-EOT
                 :construction: Deployment starting for  
-                 <#{Octopus.Web.ServerUri}#{Octopus.Web.ProjectLink}|#{Octopus.Project.Name}> to #{Octopus.Environment.Name} 
+                 #{Slack.PreDeploy.ProjectLink} to #{Octopus.Environment.Name} 
                 
-                <#{Octopus.Web.ServerUri}#{Octopus.Web.ReleaseLink}|#{Octopus.Release.Number}> | <#{Octopus.Web.ServerUri}#{Octopus.Web.DeploymentLink}|Follow deployment status here>
+                #{Slack.PreDeploy.ReleaseLink} | #{Slack.PreDeploy.DeploymentLink}
                 
                 #{if Parameters.CustomMessage}
                 Custom: #{Parameters.CustomMessage}
