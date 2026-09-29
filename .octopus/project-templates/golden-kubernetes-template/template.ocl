@@ -2,6 +2,6 @@ name = "Golden Kubernetes Template"
 description = "Default Kubernetes Template - includes notifications, namespace management, and deployment process templates."
 
 icon {
-    color = "#757575"
+    color = "#927002"
     id = "dharmachakra"
 }
