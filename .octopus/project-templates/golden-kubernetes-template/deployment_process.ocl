@@ -25,5 +25,9 @@ process_template "create-namespace" {
 process_template "notification-postdeploy" {
     name = "Notification - PostDeploy"
     process_template_slug = "notifications-postdeploy"
-    version_mask = "PreRelease"
+    version_mask = "1.X"
+
+    parameter "Parameters.CustomMessage" {
+        value = "#{Kubernetes.Notifications.PostDeployMessage}"
+    }
 }
