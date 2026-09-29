@@ -2,6 +2,10 @@ process_template "predeploy-notification" {
     name = "PreDeploy Notification"
     process_template_slug = "notifications-predeploy"
     version_mask = "PreRelease"
+
+    parameter "Parameters.CustomMessage" {
+        value = "#{ArgoCDTemplate.CustomPreDeployMessage}"
+    }
 }
 
 step "update-argo-cd-application-image-tags" {
@@ -39,5 +43,9 @@ step "update-argo-cd-application-image-tags" {
 process_template "postdeploy-notification" {
     name = "PostDeploy Notification"
     process_template_slug = "notifications-postdeploy"
-    version_mask = "PreRelease"
+    version_mask = "1.X"
+
+    parameter "Parameters.CustomMessage" {
+        value = "#{ArgoCDTemplate.CustomPostDeployMessage}"
+    }
 }
