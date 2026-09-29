@@ -1,0 +1,33 @@
+parameter "ArgoCDTemplate.DefaultChannel" {
+    display_settings = {
+        Octopus.ControlType = "Channels"
+    }
+    help_text = ""
+    label = "Default Channel"
+}
+
+parameter "ArgoCDTemplate.PullRequestEnvironments" {
+    display_settings = {
+        Octopus.ControlType = "Environments"
+    }
+    help_text = ""
+    label = "Environments Requiring Pull Request"
+}
+
+parameter "ArgoCDTemplate.PackageParameter" {
+    display_settings = {
+        Octopus.ControlType = "Package"
+    }
+    help_text = ""
+    label = "ArgoCD Update Package"
+}
+
+parameter "PT.ArgoCD.HelmImagePath" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Helm Path Template (optional)"
+    label = ""
+
+    value "image" {}
+}
