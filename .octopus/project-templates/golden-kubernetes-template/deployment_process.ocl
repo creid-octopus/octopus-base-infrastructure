@@ -20,6 +20,10 @@ process_template "create-namespace" {
     parameter "Kubectl.CreateNamespace.Name" {
         value = "#{Kubernetes.TargetNamespace}"
     }
+
+    parameter "Kubectl.CreateNamespace.WorkerPool" {
+        value = "#{Kubernetes.WorkerPool}"
+    }
 }
 
 process_template "deploy-yaml" {
@@ -29,6 +33,26 @@ process_template "deploy-yaml" {
 
     parameter "KubernetesYaml.NamespaceTarget" {
         value = "#{Kubernetes.TargetNamespace}"
+    }
+
+    parameter "KubernetesYaml.GitRepositoryUrl" {
+        value = "#{Kubernetes.YAML.GitRepositoryUrl}"
+    }
+
+    parameter "KuberenetesYaml.GitRepositoryFilePath" {
+        value = "#{Kubernetes.YAML.GitRepositoryFilePath}"
+    }
+
+    parameter "KubernetesYaml.TargetTag" {
+        value = "#{Kubernetes.TargetTags}"
+    }
+
+    parameter "KubernetesYaml.WorkerPool" {
+        value = "#{Kubernetes.WorkerPool}"
+    }
+
+    parameter "KubernetesYaml.GitRepositoryBranch" {
+        value = "#{Kubernetes.YAML.GitRepositoryBranch}"
     }
 }
 
