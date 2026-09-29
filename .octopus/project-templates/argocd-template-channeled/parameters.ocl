@@ -39,3 +39,19 @@ parameter "ArgoCDTemplate.WorkerPool" {
     help_text = ""
     label = "Worker Pool"
 }
+
+parameter "ArgoCDTemplate.CustomPreDeployMessage" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    label = "PreDeploy Custom Message"
+}
+
+parameter "ArgoCDTemplate.CustomPostDeployMessage" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    label = "PostDeploy Custom Message"
+}
