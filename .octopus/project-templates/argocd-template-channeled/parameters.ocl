@@ -46,6 +46,8 @@ parameter "ArgoCDTemplate.CustomPreDeployMessage" {
     }
     help_text = ""
     label = "PreDeploy Custom Message"
+
+    value "PreDeploy - ArgoTemplate" {}
 }
 
 parameter "ArgoCDTemplate.CustomPostDeployMessage" {
@@ -54,4 +56,6 @@ parameter "ArgoCDTemplate.CustomPostDeployMessage" {
     }
     help_text = ""
     label = "PostDeploy Custom Message"
+
+    value "PostDeploy - ArgoTemplate" {}
 }
