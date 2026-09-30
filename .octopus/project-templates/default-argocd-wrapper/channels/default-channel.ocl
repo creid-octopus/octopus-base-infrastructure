@@ -1,0 +1,13 @@
+name = "Default Channel"
+description = "Default Channel - standard environment promotion, requires SHA tagged images."
+is_default = true
+
+rule {
+    tag = "sha-[0-9a-f]{7}"
+    version_range = ""
+
+    deployment_action_packages {
+        package = "PT.ArgoCD.Package"
+        step = "Update Argo CD Application Image Tags"
+    }
+}
