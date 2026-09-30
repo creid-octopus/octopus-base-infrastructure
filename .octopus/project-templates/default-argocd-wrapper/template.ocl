@@ -1,5 +1,6 @@
 name = "Default ArgoCD Wrapper"
 description = "Default ArgoCD wrapper template - notifications and image update steps included."
+lifecycle = "default-lifecycle"
 
 icon {
     color = "#C45317"
