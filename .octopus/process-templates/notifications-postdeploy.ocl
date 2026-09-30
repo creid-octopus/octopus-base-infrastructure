@@ -50,7 +50,7 @@ step "slack-deployment-complete" {
         action_type = "Octopus.SendSlackMessage"
         properties = {
             Octopus.Action.Slack.Blocks = <<-EOT
-                "blocks": [
+                [
                 		{
                 			"type": "section",
                 			"text": {
