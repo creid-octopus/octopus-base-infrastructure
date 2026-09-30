@@ -50,11 +50,12 @@ step "slack-deployment-complete" {
         action_type = "Octopus.SendSlackMessage"
         properties = {
             Octopus.Action.Slack.Blocks = <<-EOT
+                "blocks": [
                 		{
                 			"type": "section",
                 			"text": {
                 				"type": "mrkdwn",
-                				"text": ":white_check_mark: Deployment complete for #{Slack.PostDeploy.ProjectLink | JsonEscape} to #{Octopus.Environment.Name}"
+                				"text": ":white_check_mark: Deployment complete for #{Slack.PostDeploy.ProjectLink} to #{Octopus.Environment.Name}"
                 			}
                 		},
                 		{
@@ -85,6 +86,7 @@ step "slack-deployment-complete" {
                 				}
                 			]
                 		}
+                	]
                 EOT
             Octopus.Action.Slack.ChannelIds = "C0BNWQXANAG"
             Octopus.Action.Slack.ChannelNames = "new-releases"
