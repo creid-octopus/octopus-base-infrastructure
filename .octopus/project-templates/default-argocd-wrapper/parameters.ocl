@@ -39,3 +39,19 @@ parameter "PT.ArgoCD.HelmImagePath" {
 
     value "image" {}
 }
+
+parameter "DevEnv" {
+    display_settings = {
+        Octopus.ControlType = "Environments"
+    }
+    help_text = ""
+    label = ""
+}
+
+parameter "ProdEnv" {
+    display_settings = {
+        Octopus.ControlType = "Environments"
+    }
+    help_text = ""
+    label = ""
+}
