@@ -1,11 +1,3 @@
-parameter "PT.ArgoCD.RequiredPullRequestEnvironments" {
-    display_settings = {
-        Octopus.ControlType = "Environments"
-    }
-    help_text = ""
-    label = "Environments requiring Pull Requests for ArgoCD Updates"
-}
-
 parameter "PT.ArgoCD.WorkerPool" {
     display_settings = {
         Octopus.ControlType = "WorkerPool"
