@@ -12,7 +12,7 @@ step "update-argo-cd-application-image-tags" {
         properties = {
             Octopus.Action.ArgoCD.CommitMessageSummary = "Octopus Deploy updated image versions"
             Octopus.Action.ArgoCD.CommitMethod = "PerEnvironment"
-            Octopus.Action.ArgoCD.PullRequest.EnvironmentsTemplateParameter = "#{PT.ArgoCD.RequiredPullRequestEnvironments}"
+            Octopus.Action.ArgoCD.PullRequest.EnvironmentsTemplateParameter = "#{ProdEnv}"
             Octopus.Action.ArgoCD.PushRetryAttempts = "2"
             Octopus.Action.ArgoCD.StepVerification.Method = "ArgoCDApplicationHealthy"
             Octopus.Action.ArgoCD.StepVerification.Timeout = "300"
