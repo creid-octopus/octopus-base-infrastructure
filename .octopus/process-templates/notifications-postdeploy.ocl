@@ -50,8 +50,6 @@ step "slack-deployment-complete" {
         action_type = "Octopus.SendSlackMessage"
         properties = {
             Octopus.Action.Slack.Blocks = <<-EOT
-                {
-                	"blocks": [
                 		{
                 			"type": "section",
                 			"text": {
@@ -87,8 +85,6 @@ step "slack-deployment-complete" {
                 				}
                 			]
                 		}
-                	]
-                }
                 EOT
             Octopus.Action.Slack.ChannelIds = "C0BNWQXANAG"
             Octopus.Action.Slack.ChannelNames = "new-releases"
