@@ -1,2 +1,3 @@
 name = "Testing"
 description = "Test deployments - no limitations on package/branches, but stops before production."
+lifecycle = "testing"
