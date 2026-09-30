@@ -49,6 +49,47 @@ step "slack-deployment-complete" {
     action {
         action_type = "Octopus.SendSlackMessage"
         properties = {
+            Octopus.Action.Slack.Blocks = <<-EOT
+                {
+                	"blocks": [
+                		{
+                			"type": "section",
+                			"text": {
+                				"type": "mrkdwn",
+                				"text": ":white_check_mark: Deployment complete for #{Slack.PostDeploy.ProjectLink} to #{Octopus.Environment.Name}\n#{if Parameters.CustomMessage}Custom: #{Parameters.CustomMessage}#{/if}"
+                			}
+                		},
+                		{
+                			"type": "divider"
+                		},
+                		{
+                			"type": "actions",
+                			"elements": [
+                				{
+                					"type": "button",
+                					"text": {
+                						"type": "plain_text",
+                						"text": "View Release",
+                						"emoji": true
+                					},
+                					"value": "#{Slack.PostDeploy.ReleaseLink}",
+                					"url": "#{Slack.PostDeploy.ReleaseLink}"
+                				},
+                				{
+                					"type": "button",
+                					"text": {
+                						"type": "plain_text",
+                						"text": "View Deployment",
+                						"emoji": true
+                					},
+                					"value": "click_me_123",
+                					"url": "#{Slack.PostDeploy.DeploymentLink}"
+                				}
+                			]
+                		}
+                	]
+                }
+                EOT
             Octopus.Action.Slack.ChannelIds = "C0BNWQXANAG"
             Octopus.Action.Slack.ChannelNames = "new-releases"
             Octopus.Action.Slack.Message = <<-EOT
@@ -61,6 +102,8 @@ step "slack-deployment-complete" {
                 Custom: #{Parameters.CustomMessage}
                 #{/if}
                 EOT
+            Octopus.Action.Slack.MessageFormat = "BlockKit"
+            Octopus.Action.Slack.Title = "Deployment Complete"
         }
     }
 }
