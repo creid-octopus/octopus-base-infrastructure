@@ -54,7 +54,7 @@ step "slack-deployment-complete" {
                 			"type": "section",
                 			"text": {
                 				"type": "mrkdwn",
-                				"text": ":white_check_mark: Deployment complete for #{Slack.PostDeploy.ProjectLink} to #{Octopus.Environment.Name}\n#{if Parameters.CustomMessage}Custom: #{Parameters.CustomMessage}#{/if}"
+                				"text": ":white_check_mark: Deployment complete for #{Slack.PostDeploy.ProjectLink} to #{Octopus.Environment.Name}"
                 			}
                 		},
                 		{
@@ -70,7 +70,7 @@ step "slack-deployment-complete" {
                 						"text": "View Release",
                 						"emoji": true
                 					},
-                					"value": "#{Slack.PostDeploy.ReleaseLink}",
+                					"url": "#{Slack.PostDeploy.ReleaseLink}",
                 					"action_id": "actionId-release"
                 				},
                 				{
@@ -80,7 +80,7 @@ step "slack-deployment-complete" {
                 						"text": "View Deployment",
                 						"emoji": true
                 					},
-                					"value": "#{Slack.PostDeploy.DeploymentLink}",
+                					"url": "#{Slack.PostDeploy.DeploymentLink}",
                 					"action_id": "actionId-deployment"
                 				}
                 			]
