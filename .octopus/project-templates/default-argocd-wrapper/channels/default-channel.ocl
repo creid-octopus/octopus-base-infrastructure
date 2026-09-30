@@ -1,6 +1,7 @@
 name = "Default Channel"
 description = "Default Channel - standard environment promotion, requires SHA tagged images."
 is_default = true
+lifecycle = "default-lifecycle"
 
 rule {
     tag = "sha-[0-9a-f]{7}"
