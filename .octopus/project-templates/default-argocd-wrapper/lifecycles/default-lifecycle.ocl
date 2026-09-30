@@ -1,0 +1,17 @@
+name = "Default Lifecycle"
+
+phase "Development" {
+    manual_environments = ["DevEnv"]
+}
+
+phase "Production" {
+    manual_environments = ["ProdEnv"]
+}
+
+release_retention_policy {
+    type = "Default"
+}
+
+tentacle_retention_policy {
+    type = "Default"
+}
