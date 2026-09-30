@@ -1,7 +1,7 @@
 process_template "slack-predeploy" {
     name = "Slack - PreDeploy"
     process_template_slug = "notifications-predeploy"
-    version_mask = "PreRelease"
+    version_mask = "1.X"
 }
 
 step "update-argo-cd-application-image-tags" {
@@ -39,5 +39,5 @@ step "update-argo-cd-application-image-tags" {
 process_template "slack-postdeploy" {
     name = "Slack - PostDeploy"
     process_template_slug = "notifications-postdeploy"
-    version_mask = "PreRelease"
+    version_mask = "1.X"
 }
