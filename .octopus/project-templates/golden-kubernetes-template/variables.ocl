@@ -1,0 +1,10 @@
+variable "ThisIsntReal" {
+    value "devval" {
+        environment_parameter = ["DevEnv"]
+    }
+
+    value "prodval" {
+        description = ""
+        environment_parameter = ["ProdEnv"]
+    }
+}
