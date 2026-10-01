@@ -1,3 +1,12 @@
 name = "Default"
 is_default = true
 lifecycle = "default-promotion"
+
+git_resource_rule {
+    rules = "refs/heads/main"
+
+    git_dependencies {
+        deployment_action_slug = "deploy-yaml-deploy-yaml"
+        git_dependency_name = ""
+    }
+}
