@@ -6,6 +6,10 @@ process_template "notification-predeploy" {
     parameter "Parameters.CustomMessage" {
         value = "#{Kubernetes.Notification.PreDeployMessage}"
     }
+
+    parameter "Slack.Predeploy.RunEnvs" {
+        value = "#{ProdEnv}"
+    }
 }
 
 process_template "create-namespace" {
