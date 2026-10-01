@@ -46,6 +46,45 @@ step "slack-deployment-starting" {
     action {
         action_type = "Octopus.SendSlackMessage"
         properties = {
+            Octopus.Action.Slack.Blocks = <<-EOT
+                	[
+                		{
+                			"type": "section",
+                			"text": {
+                				"type": "mrkdwn",
+                				"text": ":construction: #{Slack.PostDeploy.ProjectLink | JsonEscape} #{Octopus.Release.Number | JsonEscape} to #{Octopus.Environment.Name}\n\n#{if Parameters.CustomMessage | JsonEscape}Custom Message: #{Parameters.CustomMessage | JsonEscape}#{/if}"
+                			}
+                		},
+                		{
+                			"type": "divider"
+                		},
+                		{
+                			"type": "actions",
+                			"elements": [
+                				{
+                					"type": "button",
+                					"text": {
+                						"type": "plain_text",
+                						"text": ":mag_right:View Release",
+                						"emoji": true
+                					},
+                					"value": "#{Slack.PostDeploy.ReleaseLink | JsonEscape}",
+                					"action_id": "actionId-release"
+                				},
+                				{
+                					"type": "button",
+                					"text": {
+                						"type": "plain_text",
+                						"text": ":microscope:View Deployment",
+                						"emoji": true
+                					},
+                					"value": "#{Slack.PostDeploy.DeploymentLink | JsonEscape}",
+                					"action_id": "actionId-deployment"
+                				}
+                			]
+                		}
+                	]
+                EOT
             Octopus.Action.Slack.ChannelIds = "C0BNWQXANAG"
             Octopus.Action.Slack.ChannelNames = "new-releases"
             Octopus.Action.Slack.Message = <<-EOT
@@ -58,6 +97,8 @@ step "slack-deployment-starting" {
                 Custom: #{Parameters.CustomMessage}
                 #{/if}
                 EOT
+            Octopus.Action.Slack.MessageFormat = "BlockKit"
+            Octopus.Action.Slack.Title = "Deployment Starting"
         }
     }
 }
