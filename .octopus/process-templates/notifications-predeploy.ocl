@@ -40,11 +40,20 @@ parameter "Slack.PreDeploy.DeploymentLink" {
     value "<#{Octopus.Web.ServerUri}#{Octopus.Web.DeploymentLink}|#{Octopus.Deployment.Id}>" {}
 }
 
+parameter "Slack.Predeploy.RunEnvs" {
+    display_settings = {
+        Octopus.ControlType = "Environments"
+    }
+    help_text = ""
+    label = ""
+}
+
 step "slack-deployment-starting" {
     name = "Slack - Deployment Starting"
 
     action {
         action_type = "Octopus.SendSlackMessage"
+        environments_variables = ["#{Slack.Predeploy.RunEnvs}"]
         properties = {
             Octopus.Action.Slack.Blocks = <<-EOT
                 	[
