@@ -61,7 +61,7 @@ step "slack-deployment-starting" {
                 			"type": "section",
                 			"text": {
                 				"type": "mrkdwn",
-                				"text": ":construction: #{Slack.PostDeploy.ProjectLink | JsonEscape} #{Octopus.Release.Number | JsonEscape} to #{Octopus.Environment.Name}\n\n#{if Parameters.CustomMessage | JsonEscape}Custom Message: #{Parameters.CustomMessage | JsonEscape}#{/if}"
+                				"text": ":construction: #{Slack.PreDeploy.ProjectLink | JsonEscape} #{Octopus.Release.Number | JsonEscape} to #{Octopus.Environment.Name}\n\n#{if Parameters.CustomMessage | JsonEscape}Custom Message: #{Parameters.CustomMessage | JsonEscape}#{/if}"
                 			}
                 		},
                 		{
@@ -77,7 +77,7 @@ step "slack-deployment-starting" {
                 						"text": ":mag_right:View Release",
                 						"emoji": true
                 					},
-                					"value": "#{Slack.PostDeploy.ReleaseLink | JsonEscape}",
+                					"value": "#{Slack.PreDeploy.ReleaseLink | JsonEscape}",
                 					"action_id": "actionId-release"
                 				},
                 				{
@@ -87,7 +87,7 @@ step "slack-deployment-starting" {
                 						"text": ":microscope:View Deployment",
                 						"emoji": true
                 					},
-                					"value": "#{Slack.PostDeploy.DeploymentLink | JsonEscape}",
+                					"value": "#{Slack.PreDeploy.DeploymentLink | JsonEscape}",
                 					"action_id": "actionId-deployment"
                 				}
                 			]
