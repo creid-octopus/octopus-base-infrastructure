@@ -44,7 +44,7 @@ step "slack-deployment-starting" {
     condition = "Variable"
     name = "Slack - Deployment Starting"
     properties = {
-        Octopus.Step.ConditionVariableExpression = "#{unless Octopus.Deployment.Error}#{if Octopus.Environment.Name == \"Production\"}true#{/if}"
+        Octopus.Step.ConditionVariableExpression = "#{unless Octopus.Deployment.Error}#{if Octopus.Environment.Name == \"Production\"}true#{/if}#{/unless}"
     }
 
     action {
