@@ -51,42 +51,42 @@ step "slack-deployment-complete" {
         properties = {
             Octopus.Action.Slack.Blocks = <<-EOT
                 [
-                		{
-                			"type": "section",
-                			"text": {
-                				"type": "mrkdwn",
-                				"text": ":white_check_mark: Deployment complete for #{Slack.PostDeploy.ProjectLink} to #{Octopus.Environment.Name}"
-                			}
-                		},
-                		{
-                			"type": "divider"
-                		},
-                		{
-                			"type": "actions",
-                			"elements": [
-                				{
-                					"type": "button",
-                					"text": {
-                						"type": "plain_text",
-                						"text": "View Release",
-                						"emoji": true
-                					},
-                					"url": "#{Slack.PostDeploy.ReleaseLink}",
-                					"action_id": "actionId-release"
-                				},
-                				{
-                					"type": "button",
-                					"text": {
-                						"type": "plain_text",
-                						"text": "View Deployment",
-                						"emoji": true
-                					},
-                					"url": "#{Slack.PostDeploy.DeploymentLink}",
-                					"action_id": "actionId-deployment"
-                				}
-                			]
+                	{
+                		"type": "section",
+                		"text": {
+                			"type": "mrkdwn",
+                			"text": ":white_check_mark: Deployment complete for #{Slack.PostDeploy.ProjectLink} to #{Octopus.Environment.Name}\n#{if Parameters.CustomMessage}Custom: #{Parameters.CustomMessage}#{/if}", "emoji": true
                 		}
-                	]
+                	},
+                	{
+                		"type": "divider"
+                	},
+                	{
+                		"type": "actions",
+                		"elements": [
+                			{
+                				"type": "button",
+                				"text": {
+                					"type": "plain_text",
+                					"text": "View Release",
+                					"emoji": true
+                				},
+                				"value": "#{Slack.PostDeploy.ReleaseLink}",
+                				"action_id": "actionId-release"
+                			},
+                			{
+                				"type": "button",
+                				"text": {
+                					"type": "plain_text",
+                					"text": "View Deployment",
+                					"emoji": true
+                				},
+                				"value": "#{Slack.PostDeploy.DeploymentLink}",
+                				"action_id": "actionId-deployment"
+                			}
+                		]
+                	}
+                ]
                 EOT
             Octopus.Action.Slack.ChannelIds = "C0BNWQXANAG"
             Octopus.Action.Slack.ChannelNames = "new-releases"
