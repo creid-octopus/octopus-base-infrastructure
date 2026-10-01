@@ -1,5 +1,6 @@
 name = "Golden Kubernetes Template"
 description = "Default Kubernetes Template - includes notifications, namespace management, and deployment process templates."
+lifecycle = "default-promotion"
 
 icon {
     color = "#927002"
