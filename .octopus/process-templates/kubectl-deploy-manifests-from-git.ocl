@@ -40,6 +40,15 @@ parameter "KuberenetesYaml.GitRepositoryFilePath" {
     label = "Manifest File Path"
 }
 
+parameter "KubernetesYaml.DeploymentImage" {
+    display_settings = {
+        Octopus.ControlType = "Package"
+    }
+    help_text = "Replaced in the deployment.yaml using structured variable replacement"
+    is_optional = true
+    label = "Manifest Image"
+}
+
 parameter "KubernetesYaml.TargetTag" {
     display_settings = {
         Octopus.ControlType = "TargetTags"
