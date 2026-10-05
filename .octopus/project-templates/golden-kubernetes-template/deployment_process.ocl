@@ -58,6 +58,10 @@ process_template "deploy-yaml" {
     parameter "KubernetesYaml.GitRepositoryBranch" {
         value = "#{Kubernetes.YAML.GitRepositoryBranch}"
     }
+
+    parameter "KubernetesYaml.DeploymentImage" {
+        value = "Kubernetes.YAML.Package"
+    }
 }
 
 process_template "notification-postdeploy" {
