@@ -10,3 +10,13 @@ git_resource_rule {
         git_dependency_name = ""
     }
 }
+
+rule {
+    tag = "sha-[0-9a-f]{7}"
+    version_range = ""
+
+    deployment_action_packages {
+        package = "KubernetesYaml.DeploymentImage"
+        step = "Deploy YAML-Deploy YAML"
+    }
+}
