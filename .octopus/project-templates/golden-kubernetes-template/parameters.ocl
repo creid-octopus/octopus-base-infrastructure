@@ -30,6 +30,14 @@ parameter "Kubernetes.YAML.GitRepositoryFilePath" {
     label = "YAML File Path"
 }
 
+parameter "Kubernetes.YAML.Package" {
+    display_settings = {
+        Octopus.ControlType = "Package"
+    }
+    help_text = ""
+    label = "Manifest Image"
+}
+
 parameter "Kubernetes.Notification.PreDeployMessage" {
     display_settings = {
         Octopus.ControlType = "SingleLineText"
