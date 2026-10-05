@@ -93,5 +93,17 @@ step "deploy-yaml" {
             git_credential_type = "Library"
             repository_uri = "#{KubernetesYaml.GitRepositoryUrl}"
         }
+
+        packages "KubernetesYaml.DeploymentImage" {
+            acquisition_location = "NotAcquired"
+            feed = "ghcr-authenticated"
+            package_id = ""
+            properties = {
+                Extract = "False"
+                PackageParameterName = "KubernetesYaml.DeploymentImage"
+                Purpose = "DockerImageReference"
+                SelectionMode = "deferred"
+            }
+        }
     }
 }
