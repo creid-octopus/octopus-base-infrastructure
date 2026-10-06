@@ -121,7 +121,7 @@ parameter "RunRunbook.WaitForFinish" {
     help_text = "Wait for the child run to finish. This step fails if the child run fails."
     label = "Wait for finish"
 
-    value "True" {}
+    value "true" {}
 }
 
 parameter "RunRunbook.TimeoutSeconds" {
@@ -141,7 +141,7 @@ parameter "RunRunbook.Debug" {
     help_text = "Logs the OIDC token's iss, aud, and sub claims, plus the token exchange details. Never logs the token itself. Use this to set up the OIDC identity on the service account."
     label = "Debug OIDC claims"
 
-    value "False" {}
+    value "false" {}
 }
 
 parameter "RunRunbook.WorkerPool" {
@@ -196,17 +196,17 @@ step "run-octopus-runbook" {
                 GIT_REF="$(v GitRef)"
                 PROMPTED="$(v PromptedVariables)"
                 GUIDED_FAILURE="$(v GuidedFailure)"
-                WAIT="$(v WaitForFinish)"
+                WAIT="$(v WaitForFinish | tr '[:upper:]' '[:lower:]')"
                 TIMEOUT="$(v TimeoutSeconds)"
                 
-                DEBUG="$(v Debug)"
+                DEBUG="$(v Debug | tr '[:upper:]' '[:lower:]')"
                 
                 fail() { write_highlight "**Run runbook failed**: $1"; exit 1; }
                 
                 # --- Debug: show the claims Octopus put in the OIDC token
                 # Decodes only the payload segment and prints 3 claims. The signed
                 # token is never written to the log.
-                if [ "$DEBUG" = "True" ]; then
+                if [ "$DEBUG" = "true" ]; then
                   echo "--- Debug: OIDC token claims"
                   if [ -z "$JWT" ]; then
                     echo "JWT is empty. RunRunbook.OidcAccount.OpenIdConnect.Jwt didn't resolve."
@@ -241,7 +241,7 @@ step "run-octopus-runbook" {
                 # --- Exchange the OIDC JWT for an Octopus access token
                 TOKEN_ENDPOINT="$(curl -sf "$SERVER_URL/.well-known/openid-configuration" | jq -r '.token_endpoint')" \
                   || fail "Couldn't read $SERVER_URL/.well-known/openid-configuration."
-                [ "$DEBUG" = "True" ] && echo "Token endpoint: ${TOKEN_ENDPOINT}"
+                [ "$DEBUG" = "true" ] && echo "Token endpoint: ${TOKEN_ENDPOINT}"
                 
                 EXCHANGE_BODY="$(jq -n --arg aud "$SERVICE_ACCOUNT_ID" --arg jwt "$JWT" '{
                   grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
@@ -293,7 +293,7 @@ step "run-octopus-runbook" {
                 set_octopusvariable "TaskId" "$TASK_ID"
                 set_octopusvariable "TaskUrl" "$TASK_URL"
                 
-                if [ "$WAIT" != "True" ]; then
+                if [ "$WAIT" != "true" ]; then
                   echo "Wait for finish is off. Done."
                   exit 0
                 fi
