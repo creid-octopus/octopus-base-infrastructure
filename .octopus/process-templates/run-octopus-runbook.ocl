@@ -12,6 +12,8 @@ parameter "RunRunbook.OidcAccount" {
     }
     help_text = "Generic OIDC account whose audience is the target service account ID. The service account needs permission to run the runbook."
     label = "OIDC account"
+
+    value "runbook-runner-oidc" {}
 }
 
 parameter "RunRunbook.ServiceAccountId" {
@@ -100,7 +102,11 @@ parameter "RunRunbook.PromptedVariables" {
 parameter "RunRunbook.GuidedFailure" {
     display_settings = {
         Octopus.ControlType = "Select"
-        Octopus.SelectOptions = "default|Use the environment default\ntrue|On\nfalse|Off"
+        Octopus.SelectOptions = <<-EOT
+            default|Use the environment default
+            true|On
+            false|Off
+            EOT
     }
     help_text = "Guided failure mode for the child run."
     label = "Guided failure"
@@ -176,9 +182,9 @@ step "run-octopus-runbook" {
                 # Runs an Octopus runbook with the octopus CLI, authenticated through OIDC.
                 # Flow: OIDC account JWT -> token exchange -> OCTOPUS_ACCESS_TOKEN -> octopus CLI.
                 set -euo pipefail
-
+                
                 v() { get_octopusvariable "RunRunbook.$1" || true; }
-
+                
                 SERVER_URL="$(v ServerUrl)"; SERVER_URL="${SERVER_URL%/}"
                 SERVICE_ACCOUNT_ID="$(v ServiceAccountId)"
                 JWT="$(v OidcAccount.OpenIdConnect.Jwt)"
@@ -192,11 +198,11 @@ step "run-octopus-runbook" {
                 GUIDED_FAILURE="$(v GuidedFailure)"
                 WAIT="$(v WaitForFinish)"
                 TIMEOUT="$(v TimeoutSeconds)"
-
+                
                 DEBUG="$(v Debug)"
-
+                
                 fail() { write_highlight "**Run runbook failed**: $1"; exit 1; }
-
+                
                 # --- Debug: show the claims Octopus put in the OIDC token
                 # Decodes only the payload segment and prints 3 claims. The signed
                 # token is never written to the log.
@@ -217,7 +223,7 @@ step "run-octopus-runbook" {
                   echo "Service account ID (exchange audience): '${SERVICE_ACCOUNT_ID}'"
                   echo "Server URL: '${SERVER_URL}'"
                 fi
-
+                
                 # --- Validate inputs
                 for name in SERVER_URL SERVICE_ACCOUNT_ID JWT SPACE PROJECT RUNBOOK ENVIRONMENT; do
                   [ -n "${!name}" ] || fail "\`${name}\` is empty."
@@ -228,36 +234,36 @@ step "run-octopus-runbook" {
                   echo "Timeout ${TIMEOUT}s is over the 1-hour token lifetime. Using 3500s."
                   TIMEOUT=3500
                 fi
-
+                
                 command -v octopus >/dev/null || fail "The octopus CLI isn't installed in this image."
                 echo "octopus CLI: $(octopus version)"
-
+                
                 # --- Exchange the OIDC JWT for an Octopus access token
                 TOKEN_ENDPOINT="$(curl -sf "$SERVER_URL/.well-known/openid-configuration" | jq -r '.token_endpoint')" \
                   || fail "Couldn't read $SERVER_URL/.well-known/openid-configuration."
                 [ "$DEBUG" = "True" ] && echo "Token endpoint: ${TOKEN_ENDPOINT}"
-
+                
                 EXCHANGE_BODY="$(jq -n --arg aud "$SERVICE_ACCOUNT_ID" --arg jwt "$JWT" '{
                   grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
                   audience: $aud,
                   subject_token: $jwt,
                   subject_token_type: "urn:ietf:params:oauth:token-type:jwt"
                 }')"
-
+                
                 EXCHANGE_RESPONSE="$(curl -s -w '\n%{http_code}' -X POST "$TOKEN_ENDPOINT" \
                   -H 'Content-Type: application/json' -d "$EXCHANGE_BODY")"
                 EXCHANGE_STATUS="$(echo "$EXCHANGE_RESPONSE" | tail -n1)"
                 ACCESS_TOKEN="$(echo "$EXCHANGE_RESPONSE" | sed '$d' | jq -r '.access_token // empty')"
-
+                
                 if [ "$EXCHANGE_STATUS" != "200" ] || [ -z "$ACCESS_TOKEN" ]; then
                   echo "$EXCHANGE_RESPONSE" | sed '$d' | jq -r '.error_description // .error // .' || true
                   fail "Token exchange returned HTTP ${EXCHANGE_STATUS}. Check the OIDC identity's issuer and subject on the service account."
                 fi
                 echo "Token exchange succeeded."
-
+                
                 export OCTOPUS_URL="$SERVER_URL"
                 export OCTOPUS_ACCESS_TOKEN="$ACCESS_TOKEN"
-
+                
                 # --- Build the CLI arguments
                 ARGS=(runbook run --no-prompt --output-format basic
                       --space "$SPACE" --project "$PROJECT" --name "$RUNBOOK"
@@ -265,7 +271,7 @@ step "run-octopus-runbook" {
                 [ -n "$TENANT" ] && ARGS+=(--tenant "$TENANT")
                 [ -n "$GIT_REF" ] && ARGS+=(--git-ref "$GIT_REF")
                 [ -n "$GUIDED_FAILURE" ] && [ "$GUIDED_FAILURE" != "default" ] && ARGS+=(--guided-failure "$GUIDED_FAILURE")
-
+                
                 while IFS= read -r line; do
                   line="$(echo "$line" | sed 's/\r$//; s/^[[:space:]]*//; s/[[:space:]]*$//')"
                   [ -z "$line" ] && continue
@@ -275,23 +281,23 @@ step "run-octopus-runbook" {
                   echo "Prompted variable: ${label} = ${value}"
                   ARGS+=(-v "${label}:${value}")
                 done <<< "$PROMPTED"
-
+                
                 # --- Run
                 echo "Running: octopus ${ARGS[*]}"
                 TASK_ID="$(octopus "${ARGS[@]}" | grep -E '^ServerTasks-' | head -n1)" \
                   || fail "The octopus CLI couldn't start the runbook run."
                 [ -n "$TASK_ID" ] || fail "The CLI didn't return a task ID."
-
+                
                 TASK_URL="$SERVER_URL/app#/$(octopus space view "$SPACE" --output-format json 2>/dev/null | jq -r '.Id // empty')/tasks/$TASK_ID"
                 write_highlight "Started **${RUNBOOK}** in **${ENVIRONMENT}**: [${TASK_ID}](${TASK_URL})"
                 set_octopusvariable "TaskId" "$TASK_ID"
                 set_octopusvariable "TaskUrl" "$TASK_URL"
-
+                
                 if [ "$WAIT" != "True" ]; then
                   echo "Wait for finish is off. Done."
                   exit 0
                 fi
-
+                
                 # --- Wait
                 if octopus task wait "$TASK_ID" --space "$SPACE" --timeout "$TIMEOUT" --cancel-on-timeout --progress; then
                   write_highlight "**${RUNBOOK}** finished successfully."
