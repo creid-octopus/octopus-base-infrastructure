@@ -1,0 +1,277 @@
+name = "Run Octopus Deploy Runbook"
+description = "Runs an Octopus runbook through the octopus CLI, authenticated with a Generic OIDC account exchanged for a short-lived access token. Supports prompted variables, tenants, Config as Code branches, and wait-for-finish."
+
+icon {
+    color = "#2F93E0"
+    id = "play"
+}
+
+parameter "RunRunbook.OidcAccount" {
+    display_settings = {
+        Octopus.ControlType = "GenericOidcAccount"
+    }
+    help_text = "Generic OIDC account whose audience is the target service account ID. The service account needs permission to run the runbook."
+    label = "OIDC account"
+}
+
+parameter "RunRunbook.ServiceAccountId" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Service account ID (a GUID) used as the token exchange audience. Defaults to the OIDC account's audience."
+    label = "Service account ID"
+
+    value "#{RunRunbook.OidcAccount.Audience}" {}
+}
+
+parameter "RunRunbook.ServerUrl" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Base URL of the Octopus instance that owns the runbook. Defaults to this instance."
+    label = "Octopus Server URL"
+
+    value "#{Octopus.Web.ServerUri}" {}
+}
+
+parameter "RunRunbook.Space" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Space name or ID. Defaults to the current space."
+    label = "Space"
+
+    value "#{Octopus.Space.Name}" {}
+}
+
+parameter "RunRunbook.Project" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Name of the project that contains the runbook."
+    label = "Project"
+}
+
+parameter "RunRunbook.Runbook" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Name of the runbook to run."
+    label = "Runbook"
+}
+
+parameter "RunRunbook.Environment" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Environment to run the runbook in. Defaults to the current environment."
+    label = "Environment"
+
+    value "#{Octopus.Environment.Name}" {}
+}
+
+parameter "RunRunbook.Tenant" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Optional tenant name. Leave empty for untenanted runbooks."
+    is_optional = true
+    label = "Tenant"
+}
+
+parameter "RunRunbook.GitRef" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Config as Code projects only. Branch or ref, such as refs/heads/main. Leave empty for database-backed runbooks, which run the published snapshot."
+    is_optional = true
+    label = "Git reference"
+}
+
+parameter "RunRunbook.PromptedVariables" {
+    display_settings = {
+        Octopus.ControlType = "MultiLineText"
+    }
+    help_text = "One prompted variable per line in the format Label::Value. Only the first :: splits the line, so values can contain colons."
+    is_optional = true
+    label = "Prompted variables"
+}
+
+parameter "RunRunbook.GuidedFailure" {
+    display_settings = {
+        Octopus.ControlType = "Select"
+        Octopus.SelectOptions = "default|Use the environment default\ntrue|On\nfalse|Off"
+    }
+    help_text = "Guided failure mode for the child run."
+    label = "Guided failure"
+
+    value "default" {}
+}
+
+parameter "RunRunbook.WaitForFinish" {
+    display_settings = {
+        Octopus.ControlType = "Checkbox"
+    }
+    help_text = "Wait for the child run to finish. This step fails if the child run fails."
+    label = "Wait for finish"
+
+    value "True" {}
+}
+
+parameter "RunRunbook.TimeoutSeconds" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Seconds to wait before cancelling the child run. Must be under 3600, because the access token expires after 1 hour."
+    label = "Timeout in seconds"
+
+    value "1800" {}
+}
+
+parameter "RunRunbook.WorkerPool" {
+    display_settings = {
+        Octopus.ControlType = "WorkerPool"
+    }
+    help_text = "Worker pool that runs the CLI. Don't use a target that the child runbook also runs on."
+    label = "Worker pool"
+}
+
+parameter "RunRunbook.ContainerFeed" {
+    display_settings = {
+        Octopus.ControlType = "Feed"
+    }
+    help_text = "Container feed for the execution container."
+    label = "Execution container feed"
+}
+
+parameter "RunRunbook.ContainerImage" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Image that includes the octopus CLI (2.1.0 or later), curl, and jq."
+    label = "Execution container image"
+
+    value "octopusdeploy/worker-tools:6-ubuntu.24.04" {}
+}
+
+step "run-octopus-runbook" {
+    name = "Run Octopus Runbook"
+
+    action {
+        action_type = "Octopus.Script"
+        properties = {
+            Octopus.Action.Script.ScriptBody = <<-EOT
+                #!/usr/bin/env bash
+                # Runs an Octopus runbook with the octopus CLI, authenticated through OIDC.
+                # Flow: OIDC account JWT -> token exchange -> OCTOPUS_ACCESS_TOKEN -> octopus CLI.
+                set -euo pipefail
+
+                v() { get_octopusvariable "RunRunbook.$1" || true; }
+
+                SERVER_URL="$(v ServerUrl)"; SERVER_URL="${SERVER_URL%/}"
+                SERVICE_ACCOUNT_ID="$(v ServiceAccountId)"
+                JWT="$(v OidcAccount.OpenIdConnect.Jwt)"
+                SPACE="$(v Space)"
+                PROJECT="$(v Project)"
+                RUNBOOK="$(v Runbook)"
+                ENVIRONMENT="$(v Environment)"
+                TENANT="$(v Tenant)"
+                GIT_REF="$(v GitRef)"
+                PROMPTED="$(v PromptedVariables)"
+                GUIDED_FAILURE="$(v GuidedFailure)"
+                WAIT="$(v WaitForFinish)"
+                TIMEOUT="$(v TimeoutSeconds)"
+
+                fail() { write_highlight "**Run runbook failed**: $1"; exit 1; }
+
+                # --- Validate inputs
+                for name in SERVER_URL SERVICE_ACCOUNT_ID JWT SPACE PROJECT RUNBOOK ENVIRONMENT; do
+                  [ -n "${!name}" ] || fail "\`${name}\` is empty."
+                  case "${!name}" in *'#{'*) fail "\`${name}\` contains an unresolved variable.";; esac
+                done
+                echo "$TIMEOUT" | grep -qE '^[0-9]+$' || fail "Timeout must be a whole number of seconds."
+                if [ "$TIMEOUT" -ge 3600 ]; then
+                  echo "Timeout ${TIMEOUT}s is over the 1-hour token lifetime. Using 3500s."
+                  TIMEOUT=3500
+                fi
+
+                command -v octopus >/dev/null || fail "The octopus CLI isn't installed in this image."
+                echo "octopus CLI: $(octopus version)"
+
+                # --- Exchange the OIDC JWT for an Octopus access token
+                TOKEN_ENDPOINT="$(curl -sf "$SERVER_URL/.well-known/openid-configuration" | jq -r '.token_endpoint')" \
+                  || fail "Couldn't read $SERVER_URL/.well-known/openid-configuration."
+
+                EXCHANGE_BODY="$(jq -n --arg aud "$SERVICE_ACCOUNT_ID" --arg jwt "$JWT" '{
+                  grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+                  audience: $aud,
+                  subject_token: $jwt,
+                  subject_token_type: "urn:ietf:params:oauth:token-type:jwt"
+                }')"
+
+                EXCHANGE_RESPONSE="$(curl -s -w '\n%{http_code}' -X POST "$TOKEN_ENDPOINT" \
+                  -H 'Content-Type: application/json' -d "$EXCHANGE_BODY")"
+                EXCHANGE_STATUS="$(echo "$EXCHANGE_RESPONSE" | tail -n1)"
+                ACCESS_TOKEN="$(echo "$EXCHANGE_RESPONSE" | sed '$d' | jq -r '.access_token // empty')"
+
+                if [ "$EXCHANGE_STATUS" != "200" ] || [ -z "$ACCESS_TOKEN" ]; then
+                  echo "$EXCHANGE_RESPONSE" | sed '$d' | jq -r '.error_description // .error // .' || true
+                  fail "Token exchange returned HTTP ${EXCHANGE_STATUS}. Check the OIDC identity's issuer and subject on the service account."
+                fi
+                echo "Token exchange succeeded."
+
+                export OCTOPUS_URL="$SERVER_URL"
+                export OCTOPUS_ACCESS_TOKEN="$ACCESS_TOKEN"
+
+                # --- Build the CLI arguments
+                ARGS=(runbook run --no-prompt --output-format basic
+                      --space "$SPACE" --project "$PROJECT" --name "$RUNBOOK"
+                      --environment "$ENVIRONMENT")
+                [ -n "$TENANT" ] && ARGS+=(--tenant "$TENANT")
+                [ -n "$GIT_REF" ] && ARGS+=(--git-ref "$GIT_REF")
+                [ -n "$GUIDED_FAILURE" ] && [ "$GUIDED_FAILURE" != "default" ] && ARGS+=(--guided-failure "$GUIDED_FAILURE")
+
+                while IFS= read -r line; do
+                  line="$(echo "$line" | sed 's/\r$//; s/^[[:space:]]*//; s/[[:space:]]*$//')"
+                  [ -z "$line" ] && continue
+                  case "$line" in *::*) ;; *) fail "Prompted variable line \`$line\` isn't in Label::Value format.";; esac
+                  label="${line%%::*}"
+                  value="${line#*::}"
+                  echo "Prompted variable: ${label} = ${value}"
+                  ARGS+=(-v "${label}:${value}")
+                done <<< "$PROMPTED"
+
+                # --- Run
+                echo "Running: octopus ${ARGS[*]}"
+                TASK_ID="$(octopus "${ARGS[@]}" | grep -E '^ServerTasks-' | head -n1)" \
+                  || fail "The octopus CLI couldn't start the runbook run."
+                [ -n "$TASK_ID" ] || fail "The CLI didn't return a task ID."
+
+                TASK_URL="$SERVER_URL/app#/$(octopus space view "$SPACE" --output-format json 2>/dev/null | jq -r '.Id // empty')/tasks/$TASK_ID"
+                write_highlight "Started **${RUNBOOK}** in **${ENVIRONMENT}**: [${TASK_ID}](${TASK_URL})"
+                set_octopusvariable "TaskId" "$TASK_ID"
+                set_octopusvariable "TaskUrl" "$TASK_URL"
+
+                if [ "$WAIT" != "True" ]; then
+                  echo "Wait for finish is off. Done."
+                  exit 0
+                fi
+
+                # --- Wait
+                if octopus task wait "$TASK_ID" --space "$SPACE" --timeout "$TIMEOUT" --cancel-on-timeout --progress; then
+                  write_highlight "**${RUNBOOK}** finished successfully."
+                else
+                  fail "**${RUNBOOK}** failed, was canceled, or passed the ${TIMEOUT}s timeout. See [${TASK_ID}](${TASK_URL})."
+                fi
+                EOT
+            Octopus.Action.Script.ScriptSource = "Inline"
+            Octopus.Action.Script.Syntax = "Bash"
+        }
+        worker_pool_variable = "#{RunRunbook.WorkerPool}"
+
+        container {
+            feed = "#{RunRunbook.ContainerFeed}"
+            image = "#{RunRunbook.ContainerImage}"
+        }
+    }
+}
