@@ -52,6 +52,8 @@ parameter "RunRunbook.Project" {
     }
     help_text = "Name of the project that contains the runbook."
     label = "Project"
+
+    value "#{Octopus.Project.Name}" {}
 }
 
 parameter "RunRunbook.Runbook" {
@@ -141,7 +143,7 @@ parameter "RunRunbook.Debug" {
     help_text = "Logs the OIDC token's iss, aud, and sub claims, plus the token exchange details. Never logs the token itself. Use this to set up the OIDC identity on the service account."
     label = "Debug OIDC claims"
 
-    value "False" {}
+    value "false" {}
 }
 
 parameter "RunRunbook.WorkerPool" {
