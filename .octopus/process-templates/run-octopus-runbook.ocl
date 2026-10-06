@@ -121,7 +121,7 @@ parameter "RunRunbook.WaitForFinish" {
     help_text = "Wait for the child run to finish. This step fails if the child run fails."
     label = "Wait for finish"
 
-    value "true" {}
+    value "False" {}
 }
 
 parameter "RunRunbook.TimeoutSeconds" {
