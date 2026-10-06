@@ -128,6 +128,16 @@ parameter "RunRunbook.TimeoutSeconds" {
     value "1800" {}
 }
 
+parameter "RunRunbook.Debug" {
+    display_settings = {
+        Octopus.ControlType = "Checkbox"
+    }
+    help_text = "Logs the OIDC token's iss, aud, and sub claims, plus the token exchange details. Never logs the token itself. Use this to set up the OIDC identity on the service account."
+    label = "Debug OIDC claims"
+
+    value "False" {}
+}
+
 parameter "RunRunbook.WorkerPool" {
     display_settings = {
         Octopus.ControlType = "WorkerPool"
@@ -182,7 +192,30 @@ step "run-octopus-runbook" {
                 WAIT="$(v WaitForFinish)"
                 TIMEOUT="$(v TimeoutSeconds)"
 
+                DEBUG="$(v Debug)"
+
                 fail() { write_highlight "**Run runbook failed**: $1"; exit 1; }
+
+                # --- Debug: show the claims Octopus put in the OIDC token
+                # Decodes only the payload segment and prints 3 claims. The signed
+                # token is never written to the log.
+                if [ "$DEBUG" = "True" ]; then
+                  echo "--- Debug: OIDC token claims"
+                  if [ -z "$JWT" ]; then
+                    echo "JWT is empty. RunRunbook.OidcAccount.OpenIdConnect.Jwt didn't resolve."
+                  else
+                    CLAIMS="$(echo "$JWT" | cut -d. -f2 | tr '_-' '/+' \
+                      | awk '{ while (length($0) % 4) $0 = $0 "="; print }' \
+                      | base64 -d 2>/dev/null | jq -c '{iss, aud, sub}' 2>/dev/null || true)"
+                    if [ -n "$CLAIMS" ]; then
+                      write_highlight "OIDC claims: \`${CLAIMS}\`"
+                    else
+                      echo "Couldn't decode the token payload."
+                    fi
+                  fi
+                  echo "Service account ID (exchange audience): '${SERVICE_ACCOUNT_ID}'"
+                  echo "Server URL: '${SERVER_URL}'"
+                fi
 
                 # --- Validate inputs
                 for name in SERVER_URL SERVICE_ACCOUNT_ID JWT SPACE PROJECT RUNBOOK ENVIRONMENT; do
@@ -201,6 +234,7 @@ step "run-octopus-runbook" {
                 # --- Exchange the OIDC JWT for an Octopus access token
                 TOKEN_ENDPOINT="$(curl -sf "$SERVER_URL/.well-known/openid-configuration" | jq -r '.token_endpoint')" \
                   || fail "Couldn't read $SERVER_URL/.well-known/openid-configuration."
+                [ "$DEBUG" = "True" ] && echo "Token endpoint: ${TOKEN_ENDPOINT}"
 
                 EXCHANGE_BODY="$(jq -n --arg aud "$SERVICE_ACCOUNT_ID" --arg jwt "$JWT" '{
                   grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
