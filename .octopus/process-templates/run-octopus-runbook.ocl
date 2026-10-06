@@ -170,6 +170,7 @@ step "run-octopus-runbook" {
     action {
         action_type = "Octopus.Script"
         properties = {
+            Octopus.Action.RunOnServer = "true"
             Octopus.Action.Script.ScriptBody = <<-EOT
                 #!/usr/bin/env bash
                 # Runs an Octopus runbook with the octopus CLI, authenticated through OIDC.
