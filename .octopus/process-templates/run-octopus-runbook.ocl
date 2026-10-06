@@ -141,7 +141,7 @@ parameter "RunRunbook.Debug" {
     help_text = "Logs the OIDC token's iss, aud, and sub claims, plus the token exchange details. Never logs the token itself. Use this to set up the OIDC identity on the service account."
     label = "Debug OIDC claims"
 
-    value "false" {}
+    value "False" {}
 }
 
 parameter "RunRunbook.WorkerPool" {
