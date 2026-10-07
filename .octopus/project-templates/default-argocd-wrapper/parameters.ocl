@@ -47,3 +47,19 @@ parameter "ProdEnv" {
     help_text = ""
     label = ""
 }
+
+parameter "DevelopmentEnvironments" {
+    display_settings = {
+        Octopus.ControlType = "Environments"
+    }
+    help_text = ""
+    label = ""
+}
+
+parameter "ProductionEnvironments" {
+    display_settings = {
+        Octopus.ControlType = "Environments"
+    }
+    help_text = ""
+    label = ""
+}
