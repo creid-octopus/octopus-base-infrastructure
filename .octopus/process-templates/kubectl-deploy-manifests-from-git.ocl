@@ -85,7 +85,7 @@ step "deploy-yaml" {
         worker_pool_variable = "#{KubernetesYaml.WorkerPool}"
 
         git_dependencies {
-            default_branch = "#{KubernetesYaml.GitRepositoryBranch}"
+            default_branch = "main"
             file_path_filters = ["#{KuberenetesYaml.GitRepositoryFilePath}"]
             git_credential_id = "GitCredentials-61"
             git_credential_type = "Library"
