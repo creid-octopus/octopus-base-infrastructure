@@ -2,6 +2,10 @@ process_template "slack-predeploy" {
     name = "Slack - PreDeploy"
     process_template_slug = "notifications-predeploy"
     version_mask = "1.X"
+
+    parameter "Slack.Predeploy.RunEnvs" {
+        value = "#{ProdEnv}"
+    }
 }
 
 step "update-argo-cd-application-image-tags" {
