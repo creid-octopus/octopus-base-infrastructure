@@ -14,14 +14,6 @@ parameter "Kubernetes.YAML.GitRepositoryUrl" {
     label = "Git Repository URL"
 }
 
-parameter "Kubernetes.YAML.GitRepositoryBranch" {
-    display_settings = {
-        Octopus.ControlType = "SingleLineText"
-    }
-    help_text = ""
-    label = "Git Repository Branch"
-}
-
 parameter "Kubernetes.YAML.GitRepositoryFilePath" {
     display_settings = {
         Octopus.ControlType = "SingleLineText"
