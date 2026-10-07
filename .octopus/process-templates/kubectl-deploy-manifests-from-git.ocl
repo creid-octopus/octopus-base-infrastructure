@@ -28,8 +28,6 @@ parameter "KubernetesYaml.GitRepositoryBranch" {
     }
     help_text = ""
     label = "Git Repository Branch"
-
-    value "main" {}
 }
 
 parameter "KuberenetesYaml.GitRepositoryFilePath" {
