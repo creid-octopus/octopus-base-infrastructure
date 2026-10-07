@@ -55,10 +55,6 @@ process_template "deploy-yaml" {
         value = "#{Kubernetes.WorkerPool}"
     }
 
-    parameter "KubernetesYaml.GitRepositoryBranch" {
-        value = "#{Kubernetes.YAML.GitRepositoryBranch}"
-    }
-
     parameter "KubernetesYaml.DeploymentImage" {
         value = "Kubernetes.YAML.Package"
     }
