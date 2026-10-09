@@ -30,22 +30,6 @@ parameter "Postgres.Server.Port" {
     label = "Server port"
 }
 
-parameter "Postgres.Admin.Username" {
-    display_settings = {
-        Octopus.ControlType = "SingleLineText"
-    }
-    help_text = "Admin login that can create databases."
-    label = "Admin username"
-}
-
-parameter "Postgres.Admin.Password" {
-    display_settings = {
-        Octopus.ControlType = "Sensitive"
-    }
-    help_text = "Password for the admin login."
-    label = "Admin password"
-}
-
 parameter "Postgres.Database.Name" {
     display_settings = {
         Octopus.ControlType = "SingleLineText"
@@ -62,6 +46,16 @@ parameter "Postgres.Database.Owner" {
     label = "Database owner login"
 }
 
+parameter "Postgres.Admin" {
+    display_settings = {
+        Octopus.ControlType = "UsernamePasswordAccount"
+    }
+    help_text = ""
+    label = "Adminsitrator Postgres Account"
+
+    value "postgres-local-admin" {}
+}
+
 step "create-postgres-database" {
     name = "Create Postgres database"
     properties = {
@@ -72,36 +66,37 @@ step "create-postgres-database" {
         action_type = "Octopus.Script"
         notes = "Runs psql in a postgres:17 container through the Docker socket. Passwords go to psql on stdin, not on the command line."
         properties = {
+            Octopus.Action.RunOnServer = "false"
             Octopus.Action.Script.ScriptBody = <<-EOT
                 #!/usr/bin/env bash
                 set -euo pipefail
-
+                
                 PG_HOST="$(get_octopusvariable "Postgres.Server.Host")"
                 PG_PORT="$(get_octopusvariable "Postgres.Server.Port")"
                 ADMIN_USER="$(get_octopusvariable "Postgres.Admin.Username")"
                 ADMIN_PASSWORD="$(get_octopusvariable "Postgres.Admin.Password")"
                 DB_NAME="$(get_octopusvariable "Postgres.Database.Name")"
                 OWNER_NAME="$(get_octopusvariable "Postgres.Database.Owner")"
-
+                
                 # Escape single quotes for SQL string literals.
                 sql_lit() { printf "%s" "${1//\'/\'\'}"; }
-
+                
                 export PGPASSWORD="$ADMIN_PASSWORD"
-
+                
                 echo "Creating database '$DB_NAME' owned by '$OWNER_NAME' on $PG_HOST:$PG_PORT if it does not exist"
-
+                
                 docker run --rm -i -e PGPASSWORD postgres:17 \
                   psql -X -h "$PG_HOST" -p "$PG_PORT" -U "$ADMIN_USER" -d postgres -v ON_ERROR_STOP=1 <<SQL
                 \set db_name '$(sql_lit "$DB_NAME")'
                 \set owner_name '$(sql_lit "$OWNER_NAME")'
-
+                
                 SELECT format('CREATE DATABASE %I OWNER %I', :'db_name', :'owner_name')
                 WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = :'db_name') \gexec
-
+                
                 SELECT format('REVOKE CONNECT ON DATABASE %I FROM PUBLIC', :'db_name') \gexec
                 SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'db_name', :'owner_name') \gexec
                 SQL
-
+                
                 echo "Done: database '$DB_NAME' is ready for owner '$OWNER_NAME'"
                 EOT
             Octopus.Action.Script.ScriptSource = "Inline"
