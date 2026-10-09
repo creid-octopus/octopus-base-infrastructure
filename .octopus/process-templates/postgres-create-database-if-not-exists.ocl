@@ -64,12 +64,14 @@ parameter "Postgres.Database.Owner" {
 
 step "create-postgres-database" {
     name = "Create Postgres database"
+    properties = {
+        Octopus.Action.TargetRoles = "#{Postgres.TargetRole}"
+    }
 
     action {
         action_type = "Octopus.Script"
         notes = "Runs psql in a postgres:17 container through the Docker socket. Passwords go to psql on stdin, not on the command line."
         properties = {
-            Octopus.Action.TargetRoles = "#{Postgres.TargetRole}"
             Octopus.Action.Script.ScriptBody = <<-EOT
                 #!/usr/bin/env bash
                 set -euo pipefail
