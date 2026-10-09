@@ -30,22 +30,6 @@ parameter "Postgres.Server.Port" {
     label = "Server port"
 }
 
-parameter "Postgres.Admin.Username" {
-    display_settings = {
-        Octopus.ControlType = "SingleLineText"
-    }
-    help_text = "Admin login that can create roles."
-    label = "Admin username"
-}
-
-parameter "Postgres.Admin.Password" {
-    display_settings = {
-        Octopus.ControlType = "Sensitive"
-    }
-    help_text = "Password for the admin login."
-    label = "Admin password"
-}
-
 parameter "Postgres.Login.Username" {
     display_settings = {
         Octopus.ControlType = "SingleLineText"
@@ -62,6 +46,16 @@ parameter "Postgres.Login.Password" {
     label = "Login password"
 }
 
+parameter "Postgres.Admin" {
+    display_settings = {
+        Octopus.ControlType = "UsernamePasswordAccount"
+    }
+    help_text = ""
+    label = "Postgres Administrato Account"
+
+    value "postgres-local-admin" {}
+}
+
 step "create-postgres-user" {
     name = "Create Postgres user"
     properties = {
@@ -75,32 +69,32 @@ step "create-postgres-user" {
             Octopus.Action.Script.ScriptBody = <<-EOT
                 #!/usr/bin/env bash
                 set -euo pipefail
-
+                
                 PG_HOST="$(get_octopusvariable "Postgres.Server.Host")"
                 PG_PORT="$(get_octopusvariable "Postgres.Server.Port")"
                 ADMIN_USER="$(get_octopusvariable "Postgres.Admin.Username")"
                 ADMIN_PASSWORD="$(get_octopusvariable "Postgres.Admin.Password")"
                 LOGIN_NAME="$(get_octopusvariable "Postgres.Login.Username")"
                 LOGIN_PASSWORD="$(get_octopusvariable "Postgres.Login.Password")"
-
+                
                 # Escape single quotes for SQL string literals.
                 sql_lit() { printf "%s" "${1//\'/\'\'}"; }
-
+                
                 export PGPASSWORD="$ADMIN_PASSWORD"
-
+                
                 echo "Creating login '$LOGIN_NAME' on $PG_HOST:$PG_PORT if it does not exist, and setting its password"
-
+                
                 docker run --rm -i -e PGPASSWORD postgres:17 \
                   psql -X -h "$PG_HOST" -p "$PG_PORT" -U "$ADMIN_USER" -d postgres -v ON_ERROR_STOP=1 <<SQL
                 \set login_name '$(sql_lit "$LOGIN_NAME")'
                 \set login_password '$(sql_lit "$LOGIN_PASSWORD")'
-
+                
                 SELECT format('CREATE ROLE %I LOGIN', :'login_name')
                 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'login_name') \gexec
-
+                
                 SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'login_name', :'login_password') \gexec
                 SQL
-
+                
                 echo "Done: login '$LOGIN_NAME' is ready"
                 EOT
             Octopus.Action.Script.ScriptSource = "Inline"
