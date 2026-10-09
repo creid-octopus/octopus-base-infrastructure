@@ -1,1 +1,5 @@
+# Ignore local Terraform scratch directories
 tf-scratchpd-cloud/
+
+# Ignore markdown files in the .octopus directory, used for local documentation
+.octopus/**/*.md

@@ -1,0 +1,108 @@
+name = "Postgres - Create User If Not Exists"
+description = "Creates a login role on an existing Postgres server. Safe to rerun: an existing role is kept, and its password is reset to the value in Octopus on every run."
+
+icon {
+    color = "#336791"
+    id = "user"
+}
+
+parameter "Postgres.TargetRole" {
+    display_settings = {
+        Octopus.ControlType = "TargetTags"
+    }
+    help_text = "Target role of the Tentacle that runs psql against the Postgres server."
+    label = "Target role"
+}
+
+parameter "Postgres.Server.Host" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Host the Tentacle uses to reach Postgres. On Docker Desktop, use host.docker.internal."
+    label = "Server host"
+}
+
+parameter "Postgres.Server.Port" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    label = "Server port"
+}
+
+parameter "Postgres.Admin.Username" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Admin login that can create roles."
+    label = "Admin username"
+}
+
+parameter "Postgres.Admin.Password" {
+    display_settings = {
+        Octopus.ControlType = "Sensitive"
+    }
+    help_text = "Password for the admin login."
+    label = "Admin password"
+}
+
+parameter "Postgres.Login.Username" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Login role to create, for example orders_dev_app."
+    label = "Login username"
+}
+
+parameter "Postgres.Login.Password" {
+    display_settings = {
+        Octopus.ControlType = "Sensitive"
+    }
+    help_text = "Password for the login role. Reset on every run."
+    label = "Login password"
+}
+
+step "create-postgres-user" {
+    name = "Create Postgres user"
+
+    action {
+        action_type = "Octopus.Script"
+        notes = "Runs psql in a postgres:17 container through the Docker socket. Passwords go to psql on stdin, not on the command line."
+        properties = {
+            Octopus.Action.TargetRoles = "#{Postgres.TargetRole}"
+            Octopus.Action.Script.ScriptBody = <<-EOT
+                #!/usr/bin/env bash
+                set -euo pipefail
+
+                PG_HOST="$(get_octopusvariable "Postgres.Server.Host")"
+                PG_PORT="$(get_octopusvariable "Postgres.Server.Port")"
+                ADMIN_USER="$(get_octopusvariable "Postgres.Admin.Username")"
+                ADMIN_PASSWORD="$(get_octopusvariable "Postgres.Admin.Password")"
+                LOGIN_NAME="$(get_octopusvariable "Postgres.Login.Username")"
+                LOGIN_PASSWORD="$(get_octopusvariable "Postgres.Login.Password")"
+
+                # Escape single quotes for SQL string literals.
+                sql_lit() { printf "%s" "${1//\'/\'\'}"; }
+
+                export PGPASSWORD="$ADMIN_PASSWORD"
+
+                echo "Creating login '$LOGIN_NAME' on $PG_HOST:$PG_PORT if it does not exist, and setting its password"
+
+                docker run --rm -i -e PGPASSWORD postgres:17 \
+                  psql -X -h "$PG_HOST" -p "$PG_PORT" -U "$ADMIN_USER" -d postgres -v ON_ERROR_STOP=1 <<SQL
+                \set login_name '$(sql_lit "$LOGIN_NAME")'
+                \set login_password '$(sql_lit "$LOGIN_PASSWORD")'
+
+                SELECT format('CREATE ROLE %I LOGIN', :'login_name')
+                WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'login_name') \gexec
+
+                SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'login_name', :'login_password') \gexec
+                SQL
+
+                echo "Done: login '$LOGIN_NAME' is ready"
+                EOT
+            Octopus.Action.Script.ScriptSource = "Inline"
+            Octopus.Action.Script.Syntax = "Bash"
+        }
+    }
+}

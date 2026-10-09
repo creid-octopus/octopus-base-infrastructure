@@ -1,0 +1,55 @@
+name: octopus-local-postgres
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: octopus-local-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Set POSTGRES_ADMIN_PASSWORD in .env}
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_ADMIN_USER:-postgres} -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Polling Tentacle that runs Octopus steps against the local Postgres server.
+  # It polls outbound to the Octopus server, so no ports are published.
+  tentacle:
+    image: octopusdeploy/tentacle:latest
+    platform: linux/amd64
+    container_name: octopus-local-tentacle
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ACCEPT_EULA: "Y"
+      DISABLE_DIND: "Y"
+      ServerUrl: ${OCTOPUS_SERVER_URL:?Set OCTOPUS_SERVER_URL in .env}
+      ServerApiKey: ${OCTOPUS_API_KEY:?Set OCTOPUS_API_KEY in .env}
+      # Polling over standard HTTPS (port 443) for Octopus Cloud, so no non-standard port is needed.
+      ServerCommsAddress: ${OCTOPUS_POLLING_ADDRESS:-https://polling.creid.octopus.app}
+      ServerPort: "443"
+      TargetName: ${TENTACLE_NAME:-local-postgres}
+      TargetEnvironment: ${TENTACLE_ENVIRONMENTS:-Dev,Test,Production}
+      TargetRole: ${TENTACLE_ROLE:-local-postgres}
+      PublicHostNameConfiguration: ComputerName
+    volumes:
+      # Tentacle identity and registration. Survives container recreates.
+      - tentacle-config:/etc/octopus
+      # Packages Octopus extracts for each deployment. Mirrored on the Mac so
+      # sibling containers (Flyway) can mount the same files.
+      - ./tentacle-applications:/home/Octopus/Applications
+      # Lets Flyway and psql run as sibling containers on the Docker Desktop host.
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  postgres-data:
+  tentacle-config:
