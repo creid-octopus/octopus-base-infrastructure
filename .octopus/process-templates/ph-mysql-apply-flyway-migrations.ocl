@@ -393,6 +393,11 @@ step "mysql-create-database-if-not-exists" {
                 default_value = ""
             }
         }
+
+        container {
+            feed = "docker-hub"
+            image = "octopuslabs/flyway-workertools"
+        }
     }
 }
 
