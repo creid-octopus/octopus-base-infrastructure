@@ -412,7 +412,7 @@ step "flyway-database-migrations" {
             Flyway.Database.User = "#{ProcessTemplate.MySQL.Server.User.Name}"
             Flyway.Database.User.Password = "#{ProcessTemplate.MySQL.Server.User.Password}"
             Flyway.Package.Value = "ProcessTemplate.MySQL.Package"
-            Flyway.Target.Url = "jdbc:mysql://#{ProcessTemplate.MySQL.Server.Name}:#{ProcessTemplate.MySQL.Server.Port}/#{ProcessTemplate.Database.Name}?useUnicode=true&useSSL=true&verifyServerCertificate=false"
+            Flyway.Target.Url = "jdbc:mysql://#{ProcessTemplate.MySQL.Server.Name}:#{ProcessTemplate.MySQL.Server.Port}/#{ProcessTemplate.Database.Name}?useUnicode=true&verifyServerCertificate=false"
             Octopus.Action.EnabledFeatures = "Octopus.Features.SelectPowerShellEditionForWindows"
             Octopus.Action.PowerShell.Edition = "Core"
             Octopus.Action.RunOnServer = "true"
