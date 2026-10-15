@@ -1,28 +1,33 @@
 name = "Require PostDeploy Notifications in Production"
-description = "Check that a Process Template exists when deploying to production"
-violation_action = "block"
-violation_reason = "A required process template is missing"
+description = "Checks that production deployments are using the correct notification template."
+violation_action = "warn"
+violation_reason = "You must use the `Notifications - PostDeploy` process template when deploying to production."
 
 conditions {
     rego = <<-EOT
             package require_postdeploy_notifications_in_production
             
-            # Default: Deny all deployments
-            default result := {"allowed": false}
-            
-            # Allow: If a specific Process Template is used and not bypassed
-            result := {"allowed": true} if {
-            	some step in input.Steps
-            
-            	# Ensure the step is derived from a Process Template
-            	step.Source.Type == "Process Template"
-            
-            	# Target a specific template by its unique slug or ID
-            	step.Source.SlugOrId == "<ProcessTemplate-slug>"
-            
-            	# Verify this specific step hasn't been added to the skipped list
-            	not step.Id in input.SkippedSteps
+            default result := {
+                "allowed": false,
+                "action": "warn",
+                "reason": "Production deployments and runbook runs must use the Notifications - PostDeploy process template. Add the template, enable it, and do not skip it.",
             }
+            
+            result := {"allowed": true} if {
+                count(process_template_steps) > 0
+            
+                every step in process_template_steps {
+                    step.Enabled == true
+                    step.IsConditional == false
+                    not step.Id in input.SkippedSteps
+                }
+            }
+            
+            process_template_steps := [step |
+                some step in input.Steps
+                step.Source.Type == "Process Template"
+                step.Source.SlugOrId == "notifications-postdeploy"
+            ]
             EOT
 }
 
@@ -30,16 +35,11 @@ scope {
     rego = <<-EOT
             package require_postdeploy_notifications_in_production
             
-            default evaluate := true
+            default evaluate := false
             
-            # The following are examples of available scoping options:
-            # evaluate if {    
-            	# Scope evaluation by Environment name    
-            	# input.Environment.Name == "<environment-name>"    
-            	# Scope evaluation to Space Id    
-            	# input.Space.Id == "<space-id>"
-            	# Scope evaluation to multiple Spaces
-                # input.Project.Slug in ["<project-slug>", "<project-slug2>"]
-            # }
+            evaluate if {
+                some tag in input.Environment.Tags
+                tag == "Production"
+            }
             EOT
 }
