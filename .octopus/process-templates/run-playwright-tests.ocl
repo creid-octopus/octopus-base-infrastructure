@@ -1,0 +1,2 @@
+name = "Run Playwright Tests"
+description = "Runs Playwright tests sourced from a Git directory."
