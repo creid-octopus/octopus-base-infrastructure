@@ -39,7 +39,7 @@ scope {
             
             evaluate if {
                 some tag in input.Environment.Tags
-                tag == "Production"
+                tag == "Meta-Environment/Production"
             }
             EOT
 }
