@@ -1,0 +1,12 @@
+{
+  "name": "playwright-hello-world",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Minimal Playwright test for checking the worker execution image.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1"
+  }
+}
