@@ -7,7 +7,7 @@
 
 # Base image for the worker tools. Confirm this image and its tag on Docker Hub before building.
 ARG BASE_IMAGE=octopuslabs/workertools
-FROM ${BASE_IMAGE}
+FROM --platform=linux/amd64 ${BASE_IMAGE}
 
 ARG NODE_MAJOR=22
 ARG PLAYWRIGHT_VERSION=1.64.1
