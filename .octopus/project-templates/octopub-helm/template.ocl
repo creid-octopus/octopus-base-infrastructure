@@ -1,7 +1,0 @@
-name = "Octopub - Helm"
-description = ""
-
-icon {
-    color = "#00874D"
-    id = "dharmachakra"
-}
