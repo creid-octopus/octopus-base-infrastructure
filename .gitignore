@@ -3,3 +3,17 @@ tf-scratchpd-cloud/
 
 # Ignore markdown files in the .octopus directory, used for local documentation
 .octopus/**/*.md
+
+# Ignore local testing outputs
+playwright-report/
+dist/
+test-results/
+
+# Ignore node_modules
+node_modules/
+
+# Ignore macOS system files
+.DS_Store
+Icon?
+._*
+Thumbs.db

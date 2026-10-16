@@ -90,7 +90,7 @@ step "run-playwright-from-cloned-repository" {
                 WORK_DIR="$(mktemp -d)"
                 trap 'rm -rf "$WORK_DIR"' EXIT
                 
-                git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$WORK_DIR/repo" || exit 1
+                git clone --quiet --depth 1 --branch "$BRANCH" "$REPO_URL" "$WORK_DIR/repo" || exit 1
                 cd "$WORK_DIR/repo/$PROJECT_PATH" || exit 1
                 
                 # Use the lock file for repeatable installs when one exists.
