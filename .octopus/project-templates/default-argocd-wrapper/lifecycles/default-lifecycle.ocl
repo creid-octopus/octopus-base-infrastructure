@@ -1,11 +1,11 @@
 name = "Default Lifecycle"
 
 phase "Development" {
-    manual_environments = ["DevEnv"]
+    manual_environments = ["NonProductionEnvironments"]
 }
 
 phase "Production" {
-    manual_environments = ["ProdEnv"]
+    manual_environments = ["ProductionEnvironments"]
 }
 
 release_retention_policy {
