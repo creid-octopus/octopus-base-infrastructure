@@ -1,10 +1,10 @@
 variable "ThisIsntReal" {
     value "devval" {
-        environment_parameter = ["DevEnv"]
+        environment_parameter = ["NonProductionEnvironments"]
     }
 
     value "prodval" {
         description = ""
-        environment_parameter = ["ProdEnv"]
+        environment_parameter = ["ProductionEnvironments"]
     }
 }

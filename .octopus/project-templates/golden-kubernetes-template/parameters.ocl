@@ -66,18 +66,18 @@ parameter "Kubernetes.WorkerPool" {
     label = "Worker Pool"
 }
 
-parameter "DevEnv" {
+parameter "NonProductionEnvironments" {
     display_settings = {
         Octopus.ControlType = "Environments"
     }
     help_text = ""
-    label = ""
+    label = "NonProduction Environments - usually `Development` and `Test`"
 }
 
-parameter "ProdEnv" {
+parameter "ProductionEnvironments" {
     display_settings = {
         Octopus.ControlType = "Environments"
     }
     help_text = ""
-    label = ""
+    label = "Production environment(s) - usually `Production`"
 }

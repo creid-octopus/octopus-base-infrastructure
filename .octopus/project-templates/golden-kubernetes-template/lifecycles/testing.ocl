@@ -1,7 +1,7 @@
 name = "Testing"
 
-phase "Dev" {
-    manual_environments = ["DevEnv"]
+phase "Development" {
+    manual_environments = ["NonProductionEnvironments"]
 }
 
 release_retention_policy {
