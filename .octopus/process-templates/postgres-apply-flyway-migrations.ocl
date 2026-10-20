@@ -70,10 +70,10 @@ parameter "Postgres.Review.Policy" {
     display_settings = {
         Octopus.ControlType = "Select"
         Octopus.SelectOptions = <<-EOT
-                risky|Pause only when risky SQL is found
-                always|Always pause
-                never|Never pause
-                EOT
+            risky|Pause only when risky SQL is found
+            always|Always pause
+            never|Never pause
+            EOT
     }
     help_text = <<-EOT
             When the DBA review step pauses the deployment.
@@ -276,8 +276,8 @@ step "review-pending-migrations" {
 }
 
 step "dba-review" {
-    name = "DBA review"
     condition = "Variable"
+    name = "DBA review"
     properties = {
         Octopus.Step.ConditionVariableExpression = "#{if Postgres.Review.Policy == \"always\"}True#{/if}#{if Postgres.Review.Policy == \"risky\"}#{Octopus.Action[Review pending migrations].Output.NeedsReview}#{/if}"
     }
@@ -288,7 +288,7 @@ step "dba-review" {
         properties = {
             Octopus.Action.Manual.BlockConcurrentDeployments = "False"
             Octopus.Action.Manual.Instructions = "Open the task summary of the Review pending migrations step. Check the pending migrations and any risky statements. Approve to apply them. Reject to stop the deployment."
-
+            Octopus.Action.Manual.ResponsibleTeamIds = "global/everyone"
             Octopus.Action.RunOnServer = "false"
         }
     }
