@@ -99,6 +99,7 @@ step "flyway-info" {
 
     action {
         action_type = "Octopus.Script"
+        is_disabled = true
         properties = {
             Flyway.Authentication.Method = "usernamepassword"
             Flyway.Command.BaseLineOnMigrate = "false"
@@ -1261,7 +1262,6 @@ step "review-pending-migrations" {
 
     action {
         action_type = "Octopus.Script"
-        is_disabled = true
         notes = "Runs flyway info and scans the pending files for risky SQL. Read only. Always runs, so a policy can require this step."
         properties = {
             Octopus.Action.RunOnServer = "true"
