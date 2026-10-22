@@ -4,7 +4,7 @@ description = <<-EOT
         
         1. **Review pending migrations**: lists what Flyway is about to run and scans it for risky SQL. Changes nothing. Always runs, so a policy can require it.
         2. **DBA review**: pauses for approval. Controlled by the review policy parameter.
-        3. **Flyway migrate**: applies the migrations.
+        3. **Flyway - Migrate**: applies the migrations.
         
         The database and the login must already exist. Use Postgres - Create User If Not Exists and Postgres - Create Database If Not Exists first.
         
@@ -95,12 +95,12 @@ step "flyway-info" {
             Flyway.Authentication.Method = "usernamepassword"
             Flyway.Command.BaseLineOnMigrate = "false"
             Flyway.Command.FailOnDrift = "true"
-            Flyway.Command.Locations = "-locations=filesystem:#{Octopus.Action.Package[Postgres.Review.PackageReference].ExtractedPath}"
             Flyway.Command.OutOfOrder = "false"
             Flyway.Command.SkipExecutingMigrations = "false"
             Flyway.Command.Target = "latest"
             Flyway.Command.Value = "info"
             Flyway.Database.User = "#{Postgres.Migration.Username}"
+            Flyway.Database.User.Password = "#{Postgres.Migration.Password}"
             Flyway.Package.Value = "Postgres.Migrations.Package"
             Flyway.Target.Url = "jdbc:postgresql://#{Postgres.Server.Host}:#{Postgres.Server.Port}/#{Postgres.Database.Name}"
             Octopus.Action.EnabledFeatures = "Octopus.Features.SelectPowerShellEditionForWindows"
@@ -1237,6 +1237,7 @@ step "flyway-info" {
 
         packages "Flyway.Package.Value" {
             acquisition_location = "Server"
+            feed = "octopus-server-built-in"
             package_id = ""
             properties = {
                 Extract = "True"
@@ -1457,7 +1458,7 @@ step "dba-review" {
 }
 
 step "flyway-migrate" {
-    name = "Flyway migrate"
+    name = "Flyway - Migrate"
 
     action {
         action_type = "Octopus.Script"
@@ -1465,7 +1466,6 @@ step "flyway-migrate" {
             Flyway.Authentication.Method = "usernamepassword"
             Flyway.Command.BaseLineOnMigrate = "false"
             Flyway.Command.FailOnDrift = "true"
-            Flyway.Command.Locations = "-locations=filesystem:$packagePath"
             Flyway.Command.OutOfOrder = "false"
             Flyway.Command.SkipExecutingMigrations = "false"
             Flyway.Command.Target = "latest"
@@ -2090,7 +2090,7 @@ step "flyway-migrate" {
         worker_pool_variable = "#{Postgres.Worker.Pool}"
 
         community_action_template_snapshot {
-            id = "CommunityActionTemplates-542"
+            id = "CommunityActionTemplates-210"
             version = 15
 
             parameter "Flyway.Package.Value" {
@@ -2602,8 +2602,8 @@ step "flyway-migrate" {
         }
 
         container {
-            feed = "docker-hub"
-            image = "octopuslabs/flyway-workertools"
+            feed = "ghcr-authenticated"
+            image = "octopusdeploylabs/flyway-workertools"
         }
 
         packages "Flyway.Package.Value" {
