@@ -1429,7 +1429,7 @@ step "review-pending-migrations" {
         worker_pool_variable = "#{Postgres.Worker.Pool}"
 
         container {
-            feed = "docker-hub"
+            feed = "ghcr-authenticated"
             image = "octopuslabs/flyway-workertools"
         }
 
