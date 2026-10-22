@@ -50,12 +50,20 @@ parameter "Postgres.Database.Name" {
     label = "Database name"
 }
 
-parameter "Postgres.Migration" {
+parameter "Postgres.Migration.Username" {
     display_settings = {
-        Octopus.ControlType = "UsernamePasswordAccount"
+        Octopus.ControlType = "SingleLineText"
     }
-    help_text = "Login that runs the migrations. It should own the database."
-    label = "Migration login"
+    help_text = "Login role that runs the migrations. It should own the database, for example the role from the Postgres - Create User If Not Exists template."
+    label = "Migration login username"
+}
+
+parameter "Postgres.Migration.Password" {
+    display_settings = {
+        Octopus.ControlType = "Sensitive"
+    }
+    help_text = "Password for the migration login role."
+    label = "Migration login password"
 }
 
 parameter "Postgres.Worker.Pool" {

@@ -51,7 +51,7 @@ parameter "Postgres.Admin" {
         Octopus.ControlType = "UsernamePasswordAccount"
     }
     help_text = ""
-    label = "Adminsitrator Postgres Account"
+    label = "Administrator Postgres Account"
 
     value "postgres-local-admin" {}
 }
