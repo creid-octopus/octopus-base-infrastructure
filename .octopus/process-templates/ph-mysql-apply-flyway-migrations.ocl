@@ -1541,8 +1541,8 @@ step "flyway-database-migrations" {
         }
 
         container {
-            feed = "docker-hub"
-            image = "octopuslabs/flyway-workertools"
+            feed = "ghcr-authenticated"
+            image = "octopusdeploylabs/flyway-workertools"
         }
 
         packages "Flyway.Package.Value" {

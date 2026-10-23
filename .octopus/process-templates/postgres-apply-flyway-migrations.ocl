@@ -1430,7 +1430,7 @@ step "review-pending-migrations" {
 
         container {
             feed = "ghcr-authenticated"
-            image = "octopuslabs/flyway-workertools"
+            image = "octopusdeploylabs/flyway-workertools"
         }
 
         packages "Postgres.Review.PackageReference" {
