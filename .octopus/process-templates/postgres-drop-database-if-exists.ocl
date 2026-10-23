@@ -42,9 +42,10 @@ parameter "Postgres.Drop.ProtectedEnvironment" {
     display_settings = {
         Octopus.ControlType = "SingleLineText"
     }
-    default_value = "Production"
     help_text = "Environment name where this step refuses to run. Leave blank to protect nothing."
     label = "Protected environment"
+
+    value "Production" {}
 }
 
 parameter "Postgres.Admin" {
