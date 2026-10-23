@@ -1,0 +1,143 @@
+name = "Postgres - Verify App Access"
+description = "Connects as the application login and checks the setup. The login must connect, use the public schema, and have default privileges from the owner. It must not be able to create tables. Changes nothing. Use it after provisioning, and before a migration as a guard."
+
+icon {
+    color = "#336791"
+    id = "database"
+}
+
+parameter "Postgres.TargetRole" {
+    display_settings = {
+        Octopus.ControlType = "TargetTags"
+    }
+    help_text = "Target role of the Tentacle that runs psql against the Postgres server."
+    label = "Target role"
+}
+
+parameter "Postgres.Server.Host" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Host the Tentacle uses to reach Postgres. On Docker Desktop, use host.docker.internal."
+    label = "Server host"
+}
+
+parameter "Postgres.Server.Port" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    label = "Server port"
+}
+
+parameter "Postgres.Database.Name" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Database to check."
+    label = "Database name"
+}
+
+parameter "Postgres.Database.Owner" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Login role that owns the database. The check looks for default privileges set for this role."
+    label = "Database owner login"
+}
+
+parameter "Postgres.App.Username" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Application login to check."
+    label = "App login username"
+}
+
+parameter "Postgres.App.Password" {
+    display_settings = {
+        Octopus.ControlType = "Sensitive"
+    }
+    help_text = "Password for the application login."
+    label = "App login password"
+}
+
+step "verify-postgres-app-access" {
+    name = "Verify Postgres app access"
+    properties = {
+        Octopus.Action.TargetRoles = "#{Postgres.TargetRole}"
+    }
+
+    action {
+        action_type = "Octopus.Script"
+        notes = "Runs psql in a postgres:17 container through the Docker socket. Connects as the app login. The create table probe is expected to fail."
+        properties = {
+            Octopus.Action.RunOnServer = "false"
+            Octopus.Action.Script.ScriptBody = <<-EOT
+                #!/usr/bin/env bash
+                set -uo pipefail
+
+                PG_HOST="$(get_octopusvariable "Postgres.Server.Host")"
+                PG_PORT="$(get_octopusvariable "Postgres.Server.Port")"
+                DB_NAME="$(get_octopusvariable "Postgres.Database.Name")"
+                OWNER_NAME="$(get_octopusvariable "Postgres.Database.Owner")"
+                APP_USER="$(get_octopusvariable "Postgres.App.Username")"
+                export PGPASSWORD="$(get_octopusvariable "Postgres.App.Password")"
+
+                HINT="Run the 'Create and Provision Postgres database' runbook in this environment, then try again."
+
+                # Escape single quotes for SQL string literals.
+                sql_lit() { printf "%s" "${1//\'/\'\'}"; }
+
+                # Reads SQL on stdin. Prints bare values. Stops at the first SQL error.
+                app_psql() {
+                  docker run --rm -i -e PGPASSWORD postgres:17 \
+                    psql -X -h "$PG_HOST" -p "$PG_PORT" -U "$APP_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -tA
+                }
+
+                echo "Checking '$APP_USER' on '$DB_NAME' at $PG_HOST:$PG_PORT"
+
+                # 1. Connect and use the public schema.
+                USAGE="$(echo "SELECT has_schema_privilege(current_user, 'public', 'USAGE');" | app_psql 2>&1)"
+                if [[ "$USAGE" != "t" ]]; then
+                  echo "FAIL: '$APP_USER' could not connect or cannot use schema public."
+                  echo "psql said: $USAGE"
+                  echo "$HINT"
+                  exit 1
+                fi
+                echo "PASS: connects and uses schema public"
+
+                # 2. Default privileges from the owner, so later tables are covered.
+                DEFAULTS="$(app_psql 2>&1 <<SQL
+                SELECT count(*)
+                FROM pg_default_acl d
+                JOIN pg_roles r ON r.oid = d.defaclrole
+                JOIN pg_namespace n ON n.oid = d.defaclnamespace
+                WHERE r.rolname = '$(sql_lit "$OWNER_NAME")'
+                  AND n.nspname = 'public'
+                  AND d.defaclobjtype = 'r'
+                  AND d.defaclacl::text LIKE '%' || '$(sql_lit "$APP_USER")' || '=%';
+                SQL
+                )"
+                if [[ "$DEFAULTS" != "1" ]]; then
+                  echo "FAIL: no default privileges for '$APP_USER' on tables created by '$OWNER_NAME'."
+                  echo "$HINT"
+                  exit 1
+                fi
+                echo "PASS: default privileges cover tables created by '$OWNER_NAME'"
+
+                # 3. The app must not create tables. The probe is expected to fail.
+                if echo "CREATE TABLE public._app_access_probe (id int);" | app_psql >/dev/null 2>&1; then
+                  echo "FAIL: '$APP_USER' can create tables. It should only read and write data."
+                  echo "DROP TABLE public._app_access_probe;" | app_psql >/dev/null 2>&1 || true
+                  exit 1
+                fi
+                echo "PASS: cannot create tables"
+
+                echo "Done: '$APP_USER' has the expected access to '$DB_NAME'"
+                EOT
+            Octopus.Action.Script.ScriptSource = "Inline"
+            Octopus.Action.Script.Syntax = "Bash"
+        }
+    }
+}

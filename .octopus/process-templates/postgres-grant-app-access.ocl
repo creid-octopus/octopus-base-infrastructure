@@ -1,0 +1,130 @@
+name = "Postgres - Grant App Access"
+description = "Gives an application login read and write access to the tables in one database. Also sets default privileges, so tables that later migrations create are covered without another grant. Safe to rerun. The app login can read and write data. It cannot create or change tables."
+
+icon {
+    color = "#336791"
+    id = "database"
+}
+
+parameter "Postgres.TargetRole" {
+    display_settings = {
+        Octopus.ControlType = "TargetTags"
+    }
+    help_text = "Target role of the Tentacle that runs psql against the Postgres server."
+    label = "Target role"
+}
+
+parameter "Postgres.Server.Host" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Host the Tentacle uses to reach Postgres. On Docker Desktop, use host.docker.internal."
+    label = "Server host"
+}
+
+parameter "Postgres.Server.Port" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    label = "Server port"
+}
+
+parameter "Postgres.Database.Name" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Database that receives the grants. It must already exist."
+    label = "Database name"
+}
+
+parameter "Postgres.Database.Owner" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Login role that owns the database and runs the migrations. Default privileges apply to tables this role creates."
+    label = "Database owner login"
+}
+
+parameter "Postgres.App.Role" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Login role the application uses. It must already exist."
+    label = "App login"
+}
+
+parameter "Postgres.Admin" {
+    display_settings = {
+        Octopus.ControlType = "UsernamePasswordAccount"
+    }
+    help_text = ""
+    label = "Postgres Administrator Account"
+
+    value "postgres-local-admin" {}
+}
+
+step "grant-postgres-app-access" {
+    name = "Grant Postgres app access"
+    properties = {
+        Octopus.Action.TargetRoles = "#{Postgres.TargetRole}"
+    }
+
+    action {
+        action_type = "Octopus.Script"
+        notes = "Runs psql in a postgres:17 container through the Docker socket. Connects to the app database, not the postgres database."
+        properties = {
+            Octopus.Action.RunOnServer = "false"
+            Octopus.Action.Script.ScriptBody = <<-EOT
+                #!/usr/bin/env bash
+                set -euo pipefail
+
+                PG_HOST="$(get_octopusvariable "Postgres.Server.Host")"
+                PG_PORT="$(get_octopusvariable "Postgres.Server.Port")"
+                ADMIN_USER="$(get_octopusvariable "Postgres.Admin.Username")"
+                ADMIN_PASSWORD="$(get_octopusvariable "Postgres.Admin.Password")"
+                DB_NAME="$(get_octopusvariable "Postgres.Database.Name")"
+                OWNER_NAME="$(get_octopusvariable "Postgres.Database.Owner")"
+                APP_NAME="$(get_octopusvariable "Postgres.App.Role")"
+
+                # Escape single quotes for SQL string literals.
+                sql_lit() { printf "%s" "${1//\'/\'\'}"; }
+
+                export PGPASSWORD="$ADMIN_PASSWORD"
+
+                echo "Granting '$APP_NAME' access to '$DB_NAME' on $PG_HOST:$PG_PORT"
+                echo "Default privileges apply to tables created by '$OWNER_NAME'"
+
+                docker run --rm -i -e PGPASSWORD postgres:17 \
+                  psql -X -h "$PG_HOST" -p "$PG_PORT" -U "$ADMIN_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 <<SQL
+                \set db_name '$(sql_lit "$DB_NAME")'
+                \set owner_name '$(sql_lit "$OWNER_NAME")'
+                \set app_name '$(sql_lit "$APP_NAME")'
+
+                -- Connect, and use the public schema. No CREATE, so the app cannot change tables.
+                SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'db_name', :'app_name') \gexec
+                SELECT format('GRANT USAGE ON SCHEMA public TO %I', :'app_name') \gexec
+                SELECT format('REVOKE CREATE ON SCHEMA public FROM %I', :'app_name') \gexec
+
+                -- Tables and sequences that exist now.
+                SELECT format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO %I', :'app_name') \gexec
+                SELECT format('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO %I', :'app_name') \gexec
+
+                -- Tables and sequences the owner creates later, for example in a new migration.
+                SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO %I', :'owner_name', :'app_name') \gexec
+                SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO %I', :'owner_name', :'app_name') \gexec
+
+                -- The app reads the Flyway history for its schema version. It never writes it.
+                -- Default privileges grant write access when the table is created, so this
+                -- revoke applies on any run after the first migration.
+                SELECT format('REVOKE INSERT, UPDATE, DELETE ON public.flyway_schema_history FROM %I', :'app_name')
+                WHERE to_regclass('public.flyway_schema_history') IS NOT NULL \gexec
+                SQL
+
+                echo "Done: '$APP_NAME' can read and write data in '$DB_NAME'"
+                EOT
+            Octopus.Action.Script.ScriptSource = "Inline"
+            Octopus.Action.Script.Syntax = "Bash"
+        }
+    }
+}

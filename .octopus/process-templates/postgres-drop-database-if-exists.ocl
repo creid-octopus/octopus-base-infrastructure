@@ -1,0 +1,109 @@
+name = "Postgres - Drop Database If Exists"
+description = "Drops a database and ends any open connections to it. Safe to rerun: a missing database is ignored. This deletes data. The step refuses to run in the protected environment."
+
+icon {
+    color = "#c0392b"
+    id = "database"
+}
+
+parameter "Postgres.TargetRole" {
+    display_settings = {
+        Octopus.ControlType = "TargetTags"
+    }
+    help_text = "Target role of the Tentacle that runs psql against the Postgres server."
+    label = "Target role"
+}
+
+parameter "Postgres.Server.Host" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Host the Tentacle uses to reach Postgres. On Docker Desktop, use host.docker.internal."
+    label = "Server host"
+}
+
+parameter "Postgres.Server.Port" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    label = "Server port"
+}
+
+parameter "Postgres.Database.Name" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Database to drop."
+    label = "Database name"
+}
+
+parameter "Postgres.Drop.ProtectedEnvironment" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    default_value = "Production"
+    help_text = "Environment name where this step refuses to run. Leave blank to protect nothing."
+    label = "Protected environment"
+}
+
+parameter "Postgres.Admin" {
+    display_settings = {
+        Octopus.ControlType = "UsernamePasswordAccount"
+    }
+    help_text = ""
+    label = "Postgres Administrator Account"
+
+    value "postgres-local-admin" {}
+}
+
+step "drop-postgres-database" {
+    name = "Drop Postgres database"
+    properties = {
+        Octopus.Action.TargetRoles = "#{Postgres.TargetRole}"
+    }
+
+    action {
+        action_type = "Octopus.Script"
+        notes = "Runs psql in a postgres:17 container through the Docker socket. DROP DATABASE WITH (FORCE) ends open connections."
+        properties = {
+            Octopus.Action.RunOnServer = "false"
+            Octopus.Action.Script.ScriptBody = <<-EOT
+                #!/usr/bin/env bash
+                set -euo pipefail
+
+                PG_HOST="$(get_octopusvariable "Postgres.Server.Host")"
+                PG_PORT="$(get_octopusvariable "Postgres.Server.Port")"
+                ADMIN_USER="$(get_octopusvariable "Postgres.Admin.Username")"
+                ADMIN_PASSWORD="$(get_octopusvariable "Postgres.Admin.Password")"
+                DB_NAME="$(get_octopusvariable "Postgres.Database.Name")"
+                PROTECTED="$(get_octopusvariable "Postgres.Drop.ProtectedEnvironment")"
+                ENVIRONMENT_NAME="$(get_octopusvariable "Octopus.Environment.Name")"
+
+                if [[ -n "$PROTECTED" && "${ENVIRONMENT_NAME,,}" == "${PROTECTED,,}" ]]; then
+                  echo "Refusing to drop '$DB_NAME': '$ENVIRONMENT_NAME' is the protected environment."
+                  exit 1
+                fi
+
+                # Escape single quotes for SQL string literals.
+                sql_lit() { printf "%s" "${1//\'/\'\'}"; }
+
+                export PGPASSWORD="$ADMIN_PASSWORD"
+
+                echo "Dropping database '$DB_NAME' on $PG_HOST:$PG_PORT if it exists"
+
+                docker run --rm -i -e PGPASSWORD postgres:17 \
+                  psql -X -h "$PG_HOST" -p "$PG_PORT" -U "$ADMIN_USER" -d postgres -v ON_ERROR_STOP=1 <<SQL
+                \set db_name '$(sql_lit "$DB_NAME")'
+
+                SELECT format('DROP DATABASE %I WITH (FORCE)', :'db_name')
+                WHERE EXISTS (SELECT 1 FROM pg_database WHERE datname = :'db_name') \gexec
+                SQL
+
+                echo "Done: database '$DB_NAME' is gone"
+                EOT
+            Octopus.Action.Script.ScriptSource = "Inline"
+            Octopus.Action.Script.Syntax = "Bash"
+        }
+    }
+}
