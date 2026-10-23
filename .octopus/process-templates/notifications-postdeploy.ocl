@@ -55,7 +55,7 @@ step "slack-deployment-complete" {
                 			"type": "section",
                 			"text": {
                 				"type": "mrkdwn",
-                				"text": ":white_check_mark: #{Slack.PostDeploy.ProjectLink | JsonEscape} #{Octopus.Release.Number | JsonEscape} to #{Octopus.Environment.Name}\n\n#{if Parameters.CustomMessage | JsonEscape}Custom Message: #{Parameters.CustomMessage | JsonEscape}#{/if}"
+                				"text": ":white_check_mark: #{Slack.PostDeploy.ProjectLink | JsonEscape} #{Octopus.Release.Number | JsonEscape} to #{Octopus.Environment.Name}#{if Parameters.CustomMessage}\n\nCustom Message: #{Parameters.CustomMessage | JsonEscape}#{/if}"
                 			}
                 		},
                 		{
