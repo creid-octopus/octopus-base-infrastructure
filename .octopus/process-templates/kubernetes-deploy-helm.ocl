@@ -1,2 +1,64 @@
 name = "Kubernetes - Deploy Helm"
 description = ""
+
+parameter "TargetTag" {
+    display_settings = {
+        Octopus.ControlType = "TargetTags"
+    }
+    help_text = ""
+    label = ""
+}
+
+parameter "WorkerPool" {
+    display_settings = {
+        Octopus.ControlType = "WorkerPool"
+    }
+    help_text = ""
+    label = ""
+}
+
+step "deploy-a-helm-chart" {
+    name = "Deploy a Helm Chart"
+    properties = {
+        Octopus.Action.TargetRoles = "#{TargetTag}"
+    }
+
+    action {
+        action_type = "Octopus.HelmChartUpgrade"
+        properties = {
+            Octopus.Action.GitRepository.Source = "External"
+            Octopus.Action.Helm.AdditionalArgs = "#{Helm.UpgradeCommandParameters}"
+            Octopus.Action.Helm.ChartDirectory = "#{Helm.RepositoryChartDirectory}"
+            Octopus.Action.Helm.Namespace = "#{Helm.ComputedNamespace}"
+            Octopus.Action.Helm.ReleaseName = "#{Helm.ComputedNamespace}"
+            Octopus.Action.Helm.ResetValues = "True"
+            Octopus.Action.Helm.TemplateValuesSources = <<-EOT
+                [
+                  {
+                    "Type": "GitRepository",
+                    "GitRepositorySource": "External",
+                    "GitDependencyName": "TemplateValues-1",
+                    "ValuesFilePaths": "#{Helm.RepositoryValuesPath}"
+                  }
+                ]
+                EOT
+            Octopus.Action.Kubernetes.ResourceStatusCheck = "True"
+            Octopus.Action.Script.ScriptSource = "GitRepository"
+        }
+        worker_pool_variable = "#{WorkerPool}"
+
+        git_dependencies {
+            default_branch = "#{Helm.RepositoryBranch}"
+            file_path_filters = ["#{Helm.RepositoryPathFilter}"]
+            git_credential_id = "GitCredentials-61"
+            git_credential_type = "Library"
+            repository_uri = "#{Helm.RepositoryUrl}"
+        }
+
+        git_dependencies "TemplateValues-1" {
+            default_branch = "#{Helm.RepositoryBranch}"
+            git_credential_type = "Anonymous"
+            repository_uri = "#{Helm.RepositoryUrl}"
+        }
+    }
+}
