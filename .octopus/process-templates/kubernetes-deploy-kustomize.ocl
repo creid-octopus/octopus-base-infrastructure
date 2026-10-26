@@ -1,2 +1,48 @@
 name = "Kubernetes - Deploy Kustomize"
 description = ""
+
+parameter "TargetTag" {
+    display_settings = {
+        Octopus.ControlType = "TargetTags"
+    }
+    help_text = ""
+    label = ""
+}
+
+parameter "WorkerPool" {
+    display_settings = {
+        Octopus.ControlType = "WorkerPool"
+    }
+    help_text = ""
+    label = ""
+}
+
+step "deploy-with-kustomize" {
+    name = "Deploy with Kustomize"
+    properties = {
+        Octopus.Action.TargetRoles = "#{TargetTag}"
+    }
+
+    action {
+        action_type = "Octopus.Kubernetes.Kustomize"
+        properties = {
+            Octopus.Action.GitRepository.Source = "External"
+            Octopus.Action.Kubernetes.DeploymentTimeout = "180"
+            Octopus.Action.Kubernetes.Kustomize.OverlayPath = "#{Kustomize.RepositoryDirectory}"
+            Octopus.Action.Kubernetes.ResourceStatusCheck = "True"
+            Octopus.Action.Kubernetes.ServerSideApply.Enabled = "True"
+            Octopus.Action.Kubernetes.ServerSideApply.ForceConflicts = "True"
+            Octopus.Action.Script.ScriptSource = "GitRepository"
+            Octopus.Action.SubstituteInFiles.TargetFiles = "#{Kustomize.SubstitutionFiles}"
+        }
+        worker_pool_variable = "#{WorkerPool}"
+
+        git_dependencies {
+            default_branch = "#{Kustomize.RepositoryBranch}"
+            file_path_filters = ["#{Kustomize.RepositoryFilePathFilters}"]
+            git_credential_id = "GitCredentials-61"
+            git_credential_type = "Library"
+            repository_uri = "#{Kustomize.RepositoryUrl}"
+        }
+    }
+}
