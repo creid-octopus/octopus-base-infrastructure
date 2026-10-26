@@ -1,36 +1,116 @@
 name = "Kubernetes - Deploy Helm"
-description = ""
+description = "Deploy a Helm chart from a Git repository. The chart and the values file both come from the repository. The container image can come from a package reference. Octopus passes the image to Helm as the image value."
 
-parameter "TargetTag" {
+parameter "Helm.NamespaceTarget" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Namespace for the Helm release. Create the namespace before this step."
+    label = "Deployment Namespace"
+}
+
+parameter "Helm.ReleaseName" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Helm release name. Helm needs lowercase letters, numbers, and dashes only. Include the environment so releases do not collide."
+    label = "Helm Release Name"
+}
+
+parameter "Helm.GitRepositoryUrl" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Repository that holds the chart and the values file."
+    label = "Git Repository URL"
+}
+
+parameter "Helm.GitRepositoryBranch" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Branch to read the chart and values from."
+    label = "Git Repository Branch"
+
+    value "main" {}
+}
+
+parameter "Helm.GitRepositoryFilePathFilter" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Files Octopus copies from the repository. Use a glob that covers the chart directory."
+    label = "Repository File Path Filter"
+
+    value "k8s/helm/**" {}
+}
+
+parameter "Helm.ChartDirectory" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Directory in the repository that holds Chart.yaml."
+    label = "Chart Directory"
+
+    value "k8s/helm" {}
+}
+
+parameter "Helm.ValuesFilePath" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Values file for this environment, relative to the repository root."
+    label = "Values File Path"
+}
+
+parameter "Helm.UpgradeCommandParameters" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Extra arguments for helm upgrade. Leave blank for none."
+    label = "Additional Helm Arguments"
+    is_optional = true
+}
+
+parameter "Helm.DeploymentImage" {
+    display_settings = {
+        Octopus.ControlType = "Package"
+    }
+    help_text = "Container image for the app. Octopus passes the full image reference to Helm as the image value."
+    is_optional = true
+    label = "Manifest Image"
+}
+
+parameter "Helm.TargetTag" {
     display_settings = {
         Octopus.ControlType = "TargetTags"
     }
-    help_text = ""
-    label = ""
+    help_text = "Target role of the Kubernetes agent that runs Helm."
+    label = "Target Tag"
 }
 
-parameter "WorkerPool" {
+parameter "Helm.WorkerPool" {
     display_settings = {
         Octopus.ControlType = "WorkerPool"
     }
     help_text = ""
-    label = ""
+    label = "Worker Pool"
 }
 
 step "deploy-a-helm-chart" {
     name = "Deploy a Helm Chart"
     properties = {
-        Octopus.Action.TargetRoles = "#{TargetTag}"
+        Octopus.Action.TargetRoles = "#{Helm.TargetTag}"
     }
 
     action {
         action_type = "Octopus.HelmChartUpgrade"
         properties = {
             Octopus.Action.GitRepository.Source = "External"
-            Octopus.Action.Helm.AdditionalArgs = "#{Helm.UpgradeCommandParameters}"
-            Octopus.Action.Helm.ChartDirectory = "#{Helm.RepositoryChartDirectory}"
-            Octopus.Action.Helm.Namespace = "#{Helm.ComputedNamespace}"
-            Octopus.Action.Helm.ReleaseName = "#{Helm.ComputedNamespace}"
+            Octopus.Action.Helm.AdditionalArgs = "#{if Octopus.Action.Package[Helm.DeploymentImage].Image}--set image=#{Octopus.Action.Package[Helm.DeploymentImage].Image}#{/if} #{Helm.UpgradeCommandParameters}"
+            Octopus.Action.Helm.ChartDirectory = "#{Helm.ChartDirectory}"
+            Octopus.Action.Helm.Namespace = "#{Helm.NamespaceTarget}"
+            Octopus.Action.Helm.ReleaseName = "#{Helm.ReleaseName}"
             Octopus.Action.Helm.ResetValues = "True"
             Octopus.Action.Helm.TemplateValuesSources = <<-EOT
                 [
@@ -38,27 +118,39 @@ step "deploy-a-helm-chart" {
                     "Type": "GitRepository",
                     "GitRepositorySource": "External",
                     "GitDependencyName": "TemplateValues-1",
-                    "ValuesFilePaths": "#{Helm.RepositoryValuesPath}"
+                    "ValuesFilePaths": "#{Helm.ValuesFilePath}"
                   }
                 ]
                 EOT
             Octopus.Action.Kubernetes.ResourceStatusCheck = "True"
             Octopus.Action.Script.ScriptSource = "GitRepository"
         }
-        worker_pool_variable = "#{WorkerPool}"
+        worker_pool_variable = "#{Helm.WorkerPool}"
 
         git_dependencies {
-            default_branch = "#{Helm.RepositoryBranch}"
-            file_path_filters = ["#{Helm.RepositoryPathFilter}"]
+            default_branch = "#{Helm.GitRepositoryBranch}"
+            file_path_filters = ["#{Helm.GitRepositoryFilePathFilter}"]
             git_credential_id = "GitCredentials-61"
             git_credential_type = "Library"
-            repository_uri = "#{Helm.RepositoryUrl}"
+            repository_uri = "#{Helm.GitRepositoryUrl}"
         }
 
         git_dependencies "TemplateValues-1" {
-            default_branch = "#{Helm.RepositoryBranch}"
+            default_branch = "#{Helm.GitRepositoryBranch}"
             git_credential_type = "Anonymous"
-            repository_uri = "#{Helm.RepositoryUrl}"
+            repository_uri = "#{Helm.GitRepositoryUrl}"
+        }
+
+        packages "Helm.DeploymentImage" {
+            acquisition_location = "NotAcquired"
+            feed = "ghcr-authenticated"
+            package_id = ""
+            properties = {
+                Extract = "False"
+                PackageParameterName = "Helm.DeploymentImage"
+                Purpose = "DockerImageReference"
+                SelectionMode = "deferred"
+            }
         }
     }
 }

@@ -1,26 +1,81 @@
 name = "Kubernetes - Deploy Kustomize"
-description = ""
+description = "Deploy an overlay with Kustomize from a Git repository. The overlay and the base both come from the repository. The container image can come from a package reference."
 
-parameter "TargetTag" {
+parameter "Kustomize.GitRepositoryUrl" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Repository that holds the Kustomize base and overlays."
+    label = "Git Repository URL"
+}
+
+parameter "Kustomize.GitRepositoryBranch" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Branch to read the Kustomize files from."
+    label = "Git Repository Branch"
+
+    value "main" {}
+}
+
+parameter "Kustomize.GitRepositoryFilePathFilter" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Files Octopus copies from the repository. Use a glob that covers the base and every overlay. An overlay needs its base."
+    label = "Repository File Path Filter"
+
+    value "k8s/kustomize/**" {}
+}
+
+parameter "Kustomize.OverlayDirectory" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Directory in the repository that holds the overlay kustomization.yaml for this environment."
+    label = "Overlay Directory"
+}
+
+parameter "Kustomize.SubstitutionFiles" {
+    display_settings = {
+        Octopus.ControlType = "MultiLineText"
+    }
+    help_text = "Files where Octopus replaces #{variable} values before Kustomize runs. One glob per line."
+    label = "Substitution Files"
+
+    value "**/*.{yml,yaml}" {}
+}
+
+parameter "Kustomize.DeploymentImage" {
+    display_settings = {
+        Octopus.ControlType = "Package"
+    }
+    help_text = "Container image for the app. Reference the selected version in the overlay with #{Octopus.Action.Package[Kustomize.DeploymentImage].PackageVersion}."
+    is_optional = true
+    label = "Manifest Image"
+}
+
+parameter "Kustomize.TargetTag" {
     display_settings = {
         Octopus.ControlType = "TargetTags"
     }
-    help_text = ""
-    label = ""
+    help_text = "Target role of the Kubernetes agent that runs Kustomize."
+    label = "Target Tag"
 }
 
-parameter "WorkerPool" {
+parameter "Kustomize.WorkerPool" {
     display_settings = {
         Octopus.ControlType = "WorkerPool"
     }
     help_text = ""
-    label = ""
+    label = "Worker Pool"
 }
 
 step "deploy-with-kustomize" {
     name = "Deploy with Kustomize"
     properties = {
-        Octopus.Action.TargetRoles = "#{TargetTag}"
+        Octopus.Action.TargetRoles = "#{Kustomize.TargetTag}"
     }
 
     action {
@@ -28,21 +83,33 @@ step "deploy-with-kustomize" {
         properties = {
             Octopus.Action.GitRepository.Source = "External"
             Octopus.Action.Kubernetes.DeploymentTimeout = "180"
-            Octopus.Action.Kubernetes.Kustomize.OverlayPath = "#{Kustomize.RepositoryDirectory}"
+            Octopus.Action.Kubernetes.Kustomize.OverlayPath = "#{Kustomize.OverlayDirectory}"
             Octopus.Action.Kubernetes.ResourceStatusCheck = "True"
             Octopus.Action.Kubernetes.ServerSideApply.Enabled = "True"
             Octopus.Action.Kubernetes.ServerSideApply.ForceConflicts = "True"
             Octopus.Action.Script.ScriptSource = "GitRepository"
             Octopus.Action.SubstituteInFiles.TargetFiles = "#{Kustomize.SubstitutionFiles}"
         }
-        worker_pool_variable = "#{WorkerPool}"
+        worker_pool_variable = "#{Kustomize.WorkerPool}"
 
         git_dependencies {
-            default_branch = "#{Kustomize.RepositoryBranch}"
-            file_path_filters = ["#{Kustomize.RepositoryFilePathFilters}"]
+            default_branch = "#{Kustomize.GitRepositoryBranch}"
+            file_path_filters = ["#{Kustomize.GitRepositoryFilePathFilter}"]
             git_credential_id = "GitCredentials-61"
             git_credential_type = "Library"
-            repository_uri = "#{Kustomize.RepositoryUrl}"
+            repository_uri = "#{Kustomize.GitRepositoryUrl}"
+        }
+
+        packages "Kustomize.DeploymentImage" {
+            acquisition_location = "NotAcquired"
+            feed = "ghcr-authenticated"
+            package_id = ""
+            properties = {
+                Extract = "False"
+                PackageParameterName = "Kustomize.DeploymentImage"
+                Purpose = "DockerImageReference"
+                SelectionMode = "deferred"
+            }
         }
     }
 }
