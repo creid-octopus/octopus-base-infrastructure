@@ -1,0 +1,148 @@
+name = "Postgres - Lock Migration History"
+description = "Removes write access to the Flyway history table from the application login. Connects as the database owner. The owner created the table, so the owner can revoke access. Run it right after the Flyway migration step. The app keeps read access. It uses the history table to report its schema version. Safe to run on every deployment."
+
+icon {
+    color = "#336791"
+    id = "lock"
+}
+
+parameter "Postgres.TargetRole" {
+    display_settings = {
+        Octopus.ControlType = "TargetTags"
+    }
+    help_text = "Target role of the Tentacle that runs psql against the Postgres server."
+    label = "Target role"
+}
+
+parameter "Postgres.Server.Host" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Host the Tentacle uses to reach Postgres. On Docker Desktop, use host.docker.internal."
+    label = "Server host"
+}
+
+parameter "Postgres.Server.Port" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = ""
+    label = "Server port"
+}
+
+parameter "Postgres.Database.Name" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Database that holds the Flyway history table."
+    label = "Database name"
+}
+
+parameter "Postgres.Owner.Username" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Database owner login. It must own the history table. This is the same login that runs Flyway."
+    label = "Database owner login"
+}
+
+parameter "Postgres.Owner.Password" {
+    display_settings = {
+        Octopus.ControlType = "Sensitive"
+    }
+    help_text = "Password for the database owner login."
+    label = "Database owner password"
+}
+
+parameter "Postgres.App.Username" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Application login that loses write access to the history table."
+    label = "App login username"
+}
+
+parameter "Postgres.History.Table" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Flyway history table in the public schema. Leave the default unless Flyway uses a custom table name."
+    label = "History table"
+
+    value "flyway_schema_history" {}
+}
+
+step "lock-migration-history" {
+    name = "Lock migration history"
+    properties = {
+        Octopus.Action.TargetRoles = "#{Postgres.TargetRole}"
+    }
+
+    action {
+        action_type = "Octopus.Script"
+        notes = "Runs psql in a postgres:17 container through the Docker socket. Connects as the database owner. Revokes write access on the Flyway history table from the app login. Then checks the result."
+        properties = {
+            Octopus.Action.RunOnServer = "false"
+            Octopus.Action.Script.ScriptBody = <<-EOT
+                #!/usr/bin/env bash
+                set -euo pipefail
+
+                PG_HOST="$(get_octopusvariable "Postgres.Server.Host")"
+                PG_PORT="$(get_octopusvariable "Postgres.Server.Port")"
+                DB_NAME="$(get_octopusvariable "Postgres.Database.Name")"
+                OWNER_USER="$(get_octopusvariable "Postgres.Owner.Username")"
+                APP_USER="$(get_octopusvariable "Postgres.App.Username")"
+                TABLE="$(get_octopusvariable "Postgres.History.Table")"
+                export PGPASSWORD="$(get_octopusvariable "Postgres.Owner.Password")"
+
+                # Reads SQL on stdin. Prints bare values. Stops at the first SQL error.
+                owner_psql() {
+                  docker run --rm -i -e PGPASSWORD postgres:17 \
+                    psql -X -h "$PG_HOST" -p "$PG_PORT" -U "$OWNER_USER" -d "$DB_NAME" \
+                    -v ON_ERROR_STOP=1 -v app_name="$APP_USER" -v table_name="$TABLE" -tA
+                }
+
+                echo "Locking '$TABLE' in '$DB_NAME' at $PG_HOST:$PG_PORT against writes by '$APP_USER'"
+
+                # Nothing to protect if the table does not exist yet.
+                EXISTS="$(echo "SELECT to_regclass('public.' || quote_ident(:'table_name')) IS NOT NULL;" | owner_psql)"
+                if [[ "$EXISTS" != "t" ]]; then
+                  echo "Table public.$TABLE does not exist. Nothing to lock."
+                  exit 0
+                fi
+
+                # The owner must own the table. Otherwise the revoke does nothing.
+                OWNED="$(echo "SELECT pg_get_userbyid(relowner) = current_user FROM pg_class WHERE oid = to_regclass('public.' || quote_ident(:'table_name'));" | owner_psql)"
+                if [[ "$OWNED" != "t" ]]; then
+                  echo "FAIL: '$OWNER_USER' does not own public.$TABLE. Run Flyway as the database owner."
+                  exit 1
+                fi
+
+                # Revoke every write privilege. Revoking a privilege that is not held is harmless.
+                owner_psql <<'SQL'
+                SELECT format('REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.%I FROM %I', :'table_name', :'app_name') \gexec
+                SQL
+
+                # Check the result. The app can read. The app cannot write.
+                RESULT="$(owner_psql <<'SQL'
+                SELECT
+                  has_table_privilege(:'app_name', 'public.' || quote_ident(:'table_name'), 'SELECT')
+                  || ',' ||
+                  (has_table_privilege(:'app_name', 'public.' || quote_ident(:'table_name'), 'INSERT')
+                   OR has_table_privilege(:'app_name', 'public.' || quote_ident(:'table_name'), 'UPDATE')
+                   OR has_table_privilege(:'app_name', 'public.' || quote_ident(:'table_name'), 'DELETE')
+                   OR has_table_privilege(:'app_name', 'public.' || quote_ident(:'table_name'), 'TRUNCATE'));
+                SQL
+                )"
+                if [[ "$RESULT" != "true,false" ]]; then
+                  echo "FAIL: expected read only access for '$APP_USER' on public.$TABLE. Got select,write = $RESULT"
+                  exit 1
+                fi
+
+                echo "Done: '$APP_USER' can read public.$TABLE and cannot write it"
+                EOT
+            Octopus.Action.Script.ScriptSource = "Inline"
+            Octopus.Action.Script.Syntax = "Bash"
+        }
+    }
+}
