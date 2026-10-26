@@ -68,8 +68,8 @@ parameter "Helm.UpgradeCommandParameters" {
         Octopus.ControlType = "SingleLineText"
     }
     help_text = "Extra arguments for helm upgrade. Leave blank for none."
-    label = "Additional Helm Arguments"
     is_optional = true
+    label = "Additional Helm Arguments"
 }
 
 parameter "Helm.DeploymentImage" {
@@ -115,9 +115,7 @@ step "deploy-a-helm-chart" {
             Octopus.Action.Helm.TemplateValuesSources = <<-EOT
                 [
                   {
-                    "Type": "GitRepository",
-                    "GitRepositorySource": "External",
-                    "GitDependencyName": "TemplateValues-1",
+                    "Type": "Chart",
                     "ValuesFilePaths": "#{Helm.ValuesFilePath}"
                   }
                 ]
@@ -135,12 +133,6 @@ step "deploy-a-helm-chart" {
             repository_uri = "#{Helm.GitRepositoryUrl}"
         }
 
-        git_dependencies "TemplateValues-1" {
-            default_branch = "#{Helm.GitRepositoryBranch}"
-            git_credential_type = "Anonymous"
-            repository_uri = "#{Helm.GitRepositoryUrl}"
-        }
-
         packages "Helm.DeploymentImage" {
             acquisition_location = "NotAcquired"
             feed = "ghcr-authenticated"
@@ -150,6 +142,7 @@ step "deploy-a-helm-chart" {
                 PackageParameterName = "Helm.DeploymentImage"
                 Purpose = "DockerImageReference"
                 SelectionMode = "deferred"
+                ValuesFilePath = ""
             }
         }
     }
