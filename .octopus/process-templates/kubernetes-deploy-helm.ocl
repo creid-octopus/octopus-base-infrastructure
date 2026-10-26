@@ -59,7 +59,7 @@ parameter "Helm.ValuesFilePath" {
     display_settings = {
         Octopus.ControlType = "SingleLineText"
     }
-    help_text = "Values file for this environment, relative to the repository root."
+    help_text = "Values file for this environment, relative to the repository root. For example, k8s/helm/values-development.yaml."
     label = "Values File Path"
 }
 
@@ -107,7 +107,7 @@ step "deploy-a-helm-chart" {
         action_type = "Octopus.HelmChartUpgrade"
         properties = {
             Octopus.Action.GitRepository.Source = "External"
-            Octopus.Action.Helm.AdditionalArgs = "#{if Octopus.Action.Package[Helm.DeploymentImage].Image}--set image=#{Octopus.Action.Package[Helm.DeploymentImage].Image}#{/if} #{Helm.UpgradeCommandParameters}"
+            Octopus.Action.Helm.AdditionalArgs = "#{if Octopus.Action.Package[Helm.DeploymentImage].Image}--set image=#{Octopus.Action.Package[Helm.DeploymentImage].Image}#{/if}#{if Helm.UpgradeCommandParameters} #{Helm.UpgradeCommandParameters}#{/if}"
             Octopus.Action.Helm.ChartDirectory = "#{Helm.ChartDirectory}"
             Octopus.Action.Helm.Namespace = "#{Helm.NamespaceTarget}"
             Octopus.Action.Helm.ReleaseName = "#{Helm.ReleaseName}"
