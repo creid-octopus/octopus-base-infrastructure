@@ -47,21 +47,11 @@ parameter "Kustomize.SubstitutionFiles" {
     value "**/*.{yml,yaml}" {}
 }
 
-parameter "Kustomize.StructuredVariableFiles" {
-    display_settings = {
-        Octopus.ControlType = "MultiLineText"
-    }
-    help_text = "Files where Octopus replaces values by matching YAML paths to variable names. For example, the variable spec:template:spec:containers:0:image replaces the first container image. One glob per line."
-    label = "Structured Variable Files"
-
-    value "**/*.{yml,yaml}" {}
-}
-
 parameter "Kustomize.DeploymentImage" {
     display_settings = {
         Octopus.ControlType = "Package"
     }
-    help_text = "Container image for the app. A project variable can reference the full image with #{Octopus.Action.Package[Kustomize.DeploymentImage].Image}."
+    help_text = "Container image for the app. Reference the selected version in the overlay with #{Octopus.Action.Package[Kustomize.DeploymentImage].PackageVersion}. The step does not support structured variable replacement."
     is_optional = true
     label = "Manifest Image"
 }
@@ -97,7 +87,6 @@ step "deploy-with-kustomize" {
             Octopus.Action.Kubernetes.ResourceStatusCheck = "True"
             Octopus.Action.Kubernetes.ServerSideApply.Enabled = "True"
             Octopus.Action.Kubernetes.ServerSideApply.ForceConflicts = "True"
-            Octopus.Action.Package.JsonConfigurationVariablesTargets = "#{Kustomize.StructuredVariableFiles}"
             Octopus.Action.Script.ScriptSource = "GitRepository"
             Octopus.Action.SubstituteInFiles.TargetFiles = "#{Kustomize.SubstitutionFiles}"
         }
