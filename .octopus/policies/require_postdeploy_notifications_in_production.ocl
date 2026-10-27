@@ -9,7 +9,7 @@ conditions {
             
             default result := {
                 "allowed": false,
-                "action": "warn",
+                "action": "block",
                 "reason": "Production deployments and runbook runs must use the Notifications - PostDeploy process template. Add the template, enable it, and do not skip it.",
             }
             
