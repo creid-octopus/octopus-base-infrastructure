@@ -1,11 +1,11 @@
 name = "Verify package attestation"
 description = <<-EOT
         Verifies the GitHub build provenance attestation of a package before anything deploys. The step fails when no valid attestation matches the package hash.
-
+        
         This template wraps the community step template Verify GitHub Attestation. It supports packages only. The community step does not support OCI container images.
-
+        
         The step attaches the verification JSON to the deployment as an artifact. Auditors can download it from the Production deployment.
-
+        
         The step runs on the Octopus Server in the octopuslabs/github-workertools execution container. That image includes the gh CLI.
         EOT
 
@@ -91,33 +91,33 @@ step "verify-package-attestation" {
                 printCommand=$(get_octopusvariable "VerifyAttestation.PrintCommand")
                 createArtifact=$(get_octopusvariable "VerifyAttestation.CreateArtifact")
                 deploymentId="#{Octopus.Deployment.Id | ToLower}"
-
+                
                 export GITHUB_TOKEN="$token"
-
+                
                 if ! command -v gh &> /dev/null; then
                     echo "gh could not be found. Use an execution container image that includes it." 1>&2
                     exit 1
                 fi
-
+                
                 if [ -z "$token" ]; then
                     fail_step "GitHub token is required."
                 fi
-
+                
                 if [ -z "$owner" ] && [ -z "$repo" ]; then
                     fail_step "Set either the GitHub owner or the GitHub repository."
                 fi
-
+                
                 args=(attestation verify "$package" --format json)
                 [ -n "$owner" ] && args+=(--owner "$owner")
                 [ -n "$repo" ] && args+=(--repo "$repo")
                 # Flags are split on spaces on purpose.
                 # shellcheck disable=SC2206
                 [ -n "$flags" ] && args+=($flags)
-
+                
                 if [ "$printCommand" = "True" ]; then
                     echo "gh ${args[*]}"
                 fi
-
+                
                 if json=$(gh "${args[@]}"); then
                     set_octopusvariable "Json" "$json"
                     echo "Attestation verified for $package"
@@ -141,11 +141,6 @@ step "verify-package-attestation" {
         }
         worker_pool_variable = "#{Attestation.WorkerPool}"
 
-        container {
-            feed = "docker-hub"
-            image = "octopuslabs/github-workertools"
-        }
-
         community_action_template_snapshot {
             id = "CommunityActionTemplates-550"
             version = 1
@@ -156,6 +151,7 @@ step "verify-package-attestation" {
                 }
                 help_text = "The access token used to authenticate with GitHub."
                 label = "GitHub Access Token"
+                default_value = ""
             }
 
             parameter "VerifyAttestation.Package" {
@@ -211,6 +207,11 @@ step "verify-package-attestation" {
                 label = "Create Artifact?"
                 default_value = "False"
             }
+        }
+
+        container {
+            feed = "ghcr-authenticated"
+            image = "octopuslabs/github-workertools"
         }
 
         packages "VerifyAttestation.Package" {
