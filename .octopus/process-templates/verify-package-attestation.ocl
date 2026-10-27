@@ -1,0 +1,161 @@
+name = "Verify package attestation"
+description = <<-EOT
+        Verifies the GitHub build provenance attestation of a package before anything deploys. The step fails when no valid attestation matches the package hash.
+
+        This template wraps the community step template Verify GitHub Attestation. It supports packages only. The community step does not support OCI container images.
+
+        The step attaches the verification JSON to the deployment as an artifact. Auditors can download it from the Production deployment.
+
+        The step runs on the Octopus Server in the octopuslabs/github-workertools execution container. That image includes the gh CLI.
+        EOT
+
+icon {
+    color = "#2E475D"
+    id = "shield-check"
+}
+
+parameter "Attestation.Package" {
+    display_settings = {
+        Octopus.ControlType = "Package"
+    }
+    help_text = "Package to verify. The build workflow attests every zip in packaging/."
+    label = "Package"
+}
+
+parameter "Attestation.Owner" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "GitHub user or organization that owns the repository which built the package. Example: creid-octopus."
+    label = "GitHub owner"
+}
+
+parameter "Attestation.Token" {
+    display_settings = {
+        Octopus.ControlType = "Sensitive"
+    }
+    help_text = "GitHub token that can read attestations. Use a token with read access to the repository."
+    label = "GitHub token"
+}
+
+parameter "Attestation.Flags" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Optional extra gh attestation verify flags. Example: `--source-ref refs/heads/main`. Do not add `--format`."
+    is_optional = true
+    label = "Extra flags"
+}
+
+parameter "Attestation.CreateArtifact" {
+    display_settings = {
+        Octopus.ControlType = "Checkbox"
+    }
+    help_text = "Attach the verification JSON to the deployment as an artifact."
+    label = "Attach artifact"
+
+    value "True" {}
+}
+
+step "verify-package-attestation" {
+    name = "Verify package attestation"
+
+    action {
+        action_type = "Octopus.Script"
+        properties = {
+            Octopus.Action.RunOnServer = "true"
+            Octopus.Action.Script.ScriptSource = "Inline"
+            Octopus.Action.Script.Syntax = "Bash"
+            VerifyAttestation.CreateArtifact = "#{Attestation.CreateArtifact}"
+            VerifyAttestation.Flags = "#{Attestation.Flags}"
+            VerifyAttestation.Owner = "#{Attestation.Owner}"
+            VerifyAttestation.Package = "Attestation.Package"
+            VerifyAttestation.PrintCommand = "True"
+            VerifyAttestation.Repo = ""
+            VerifyAttestation.Token = "#{Attestation.Token}"
+        }
+
+        container {
+            feed = "dockerhub-anonymous"
+            image = "octopuslabs/github-workertools"
+        }
+
+        community_action_template_snapshot {
+            id = "CommunityActionTemplates-550"
+            version = 1
+
+            parameter "VerifyAttestation.Token" {
+                display_settings = {
+                    Octopus.ControlType = "Sensitive"
+                }
+                help_text = "The access token used to authenticate with GitHub."
+                label = "GitHub Access Token"
+            }
+
+            parameter "VerifyAttestation.Package" {
+                display_settings = {
+                    Octopus.ControlType = "Package"
+                }
+                help_text = "The package to verify using `gh attestation verify`"
+                label = "Package to verify"
+                default_value = ""
+            }
+
+            parameter "VerifyAttestation.Owner" {
+                display_settings = {
+                    Octopus.ControlType = "SingleLineText"
+                }
+                help_text = "The `--owner` flag value."
+                label = "Owner"
+                default_value = ""
+            }
+
+            parameter "VerifyAttestation.Repo" {
+                display_settings = {
+                    Octopus.ControlType = "SingleLineText"
+                }
+                help_text = "The `--repo` flag value. Leave blank. The community step passes the owner to `-R` when this is set."
+                label = "Repo"
+                default_value = ""
+            }
+
+            parameter "VerifyAttestation.Flags" {
+                display_settings = {
+                    Octopus.ControlType = "SingleLineText"
+                }
+                help_text = "See gh attestation verify for available flags. Do not provide `--format`."
+                label = "Flags"
+                default_value = ""
+            }
+
+            parameter "VerifyAttestation.PrintCommand" {
+                display_settings = {
+                    Octopus.ControlType = "Checkbox"
+                }
+                help_text = "Prints the command in the logs."
+                label = "Print Command?"
+                default_value = "False"
+            }
+
+            parameter "VerifyAttestation.CreateArtifact" {
+                display_settings = {
+                    Octopus.ControlType = "Checkbox"
+                }
+                help_text = "Check to save the attestation result json as an Octopus artifact on the deployment."
+                label = "Create Artifact?"
+                default_value = "False"
+            }
+        }
+
+        packages "VerifyAttestation.Package" {
+            acquisition_location = "Server"
+            feed = "octopus-server-built-in"
+            package_id = ""
+            properties = {
+                Extract = "False"
+                PackageParameterName = "Attestation.Package"
+                SelectionMode = "deferred"
+            }
+        }
+    }
+}
