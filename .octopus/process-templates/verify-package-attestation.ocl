@@ -142,7 +142,7 @@ step "verify-package-attestation" {
         worker_pool_variable = "#{Attestation.WorkerPool}"
 
         container {
-            feed = "dockerhub-anonymous"
+            feed = "docker-hub"
             image = "octopuslabs/github-workertools"
         }
 
