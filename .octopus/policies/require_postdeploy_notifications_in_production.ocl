@@ -1,6 +1,6 @@
 name = "Require PostDeploy Notifications in Production"
 description = "Checks that production deployments are using the correct notification template."
-violation_action = "warn"
+violation_action = "block"
 violation_reason = "You must use the `Notifications - PostDeploy` process template when deploying to production."
 
 conditions {
