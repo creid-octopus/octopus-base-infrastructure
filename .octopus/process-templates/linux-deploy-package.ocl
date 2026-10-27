@@ -1,0 +1,117 @@
+name = "Linux - Deploy Package"
+description = "Deploy an application package to a Linux server through a Tentacle. Checks the Node.js runtime first. Extracts the package into the install directory and replaces #{variable} values in the env files. Then runs the PostDeploy.sh script that ships inside the package. That script restarts the app and waits for it to be healthy."
+
+parameter "LinuxPackage.TargetRole" {
+    display_settings = {
+        Octopus.ControlType = "TargetTags"
+    }
+    help_text = "Target role of the Linux servers that run the app."
+    label = "Target Tag"
+}
+
+parameter "LinuxPackage.Package" {
+    display_settings = {
+        Octopus.ControlType = "Package"
+    }
+    help_text = "Application package. It must contain a PostDeploy.sh script that restarts the app."
+    label = "Application Package"
+}
+
+parameter "LinuxPackage.InstallDirectory" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Folder on the server that holds the app. Octopus clears this folder before each deployment. Keep logs and state outside it."
+    label = "Install Directory"
+}
+
+parameter "LinuxPackage.SubstitutionFiles" {
+    display_settings = {
+        Octopus.ControlType = "MultiLineText"
+    }
+    help_text = "Files where Octopus replaces #{variable} values after extraction. Paths are relative to the install directory. One glob per line."
+    label = "Substitution Files"
+
+    value "**/*.env" {}
+}
+
+parameter "LinuxPackage.MinimumNodeVersion" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Lowest Node.js version the server may run. The package does not carry the runtime, so the deployment checks the host. Raise this value when a runtime security fix ships."
+    label = "Minimum Node.js Version"
+
+    value "24.22.1" {}
+}
+
+step "check-node-runtime" {
+    name = "Check Node.js runtime"
+    properties = {
+        Octopus.Action.TargetRoles = "#{LinuxPackage.TargetRole}"
+    }
+
+    action {
+        action_type = "Octopus.Script"
+        notes = "The package carries app dependencies but not the Node.js runtime. This step fails the deployment when the server runs an older Node.js than the minimum."
+        properties = {
+            Octopus.Action.RunOnServer = "false"
+            Octopus.Action.Script.ScriptBody = <<-EOT
+                #!/usr/bin/env bash
+                set -uo pipefail
+
+                MINIMUM="$(get_octopusvariable "LinuxPackage.MinimumNodeVersion")"
+
+                if ! command -v node >/dev/null 2>&1; then
+                  echo "FAIL: node is not installed on this server."
+                  exit 1
+                fi
+
+                ACTUAL="$(node --version | sed 's/^v//')"
+                echo "Node.js on this server: $ACTUAL. Minimum: $MINIMUM."
+
+                LOWEST="$(printf '%s\n%s\n' "$MINIMUM" "$ACTUAL" | sort -V | head -n 1)"
+                if [[ "$LOWEST" != "$MINIMUM" ]]; then
+                  echo "FAIL: Node.js $ACTUAL is older than the minimum $MINIMUM. Patch the runtime on this server, then deploy again."
+                  exit 1
+                fi
+
+                echo "PASS: the Node.js runtime meets the minimum."
+                EOT
+            Octopus.Action.Script.ScriptSource = "Inline"
+            Octopus.Action.Script.Syntax = "Bash"
+        }
+    }
+}
+
+step "deploy-package" {
+    name = "Deploy package"
+    properties = {
+        Octopus.Action.TargetRoles = "#{LinuxPackage.TargetRole}"
+    }
+
+    action {
+        action_type = "Octopus.TentaclePackage"
+        notes = "Extracts the package into the install directory. Replaces variables in the env files. Octopus then runs PostDeploy.sh from the package."
+        properties = {
+            Octopus.Action.EnabledFeatures = "Octopus.Features.SubstituteInFiles"
+            Octopus.Action.Package.AutomaticallyRunConfigurationTransformationFiles = "False"
+            Octopus.Action.Package.AutomaticallyUpdateAppSettingsAndConnectionStrings = "False"
+            Octopus.Action.Package.CustomInstallationDirectory = "#{LinuxPackage.InstallDirectory}"
+            Octopus.Action.Package.CustomInstallationDirectoryShouldBePurgedBeforeDeployment = "True"
+            Octopus.Action.Package.DownloadOnTentacle = "False"
+            Octopus.Action.SubstituteInFiles.Enabled = "True"
+            Octopus.Action.SubstituteInFiles.TargetFiles = "#{LinuxPackage.SubstitutionFiles}"
+        }
+
+        packages {
+            acquisition_location = "Server"
+            feed = "octopus-server-built-in"
+            package_id = ""
+            properties = {
+                PackageParameterName = "LinuxPackage.Package"
+                SelectionMode = "deferred"
+            }
+        }
+    }
+}
