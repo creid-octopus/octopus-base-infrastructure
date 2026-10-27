@@ -108,8 +108,12 @@ step "verify-package-attestation" {
                 fi
                 
                 args=(attestation verify "$package" --format json)
-                [ -n "$owner" ] && args+=(--owner "$owner")
-                [ -n "$repo" ] && args+=(--repo "$repo")
+                # gh rejects --owner and --repo together. The repository is stricter, so it wins.
+                if [ -n "$repo" ]; then
+                    args+=(--repo "$repo")
+                else
+                    args+=(--owner "$owner")
+                fi
                 # Flags are split on spaces on purpose.
                 # shellcheck disable=SC2206
                 [ -n "$flags" ] && args+=($flags)
