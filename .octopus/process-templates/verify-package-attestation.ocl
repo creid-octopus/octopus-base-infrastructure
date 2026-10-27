@@ -22,12 +22,30 @@ parameter "Attestation.Package" {
     label = "Package"
 }
 
+parameter "Attestation.WorkerPool" {
+    display_settings = {
+        Octopus.ControlType = "WorkerPool"
+    }
+    help_text = "Worker pool that runs the step. The worker must be able to run execution containers."
+    label = "Worker pool"
+}
+
 parameter "Attestation.Owner" {
     display_settings = {
         Octopus.ControlType = "SingleLineText"
     }
-    help_text = "GitHub user or organization that owns the repository which built the package. Example: creid-octopus."
+    help_text = "GitHub user or organization that owns the repository which built the package. Example: creid-octopus. Leave blank when you set the repository."
+    is_optional = true
     label = "GitHub owner"
+}
+
+parameter "Attestation.Repo" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Repository that built the package in owner/name form. Example: creid-octopus/development-loop. Set this or the owner."
+    is_optional = true
+    label = "GitHub repository"
 }
 
 parameter "Attestation.Token" {
@@ -64,6 +82,53 @@ step "verify-package-attestation" {
         action_type = "Octopus.Script"
         properties = {
             Octopus.Action.RunOnServer = "true"
+            Octopus.Action.Script.ScriptBody = <<-EOT
+                token=$(get_octopusvariable "VerifyAttestation.Token")
+                package=$(get_octopusvariable "Octopus.Action.Package[VerifyAttestation.Package].PackageFilePath")
+                owner=$(get_octopusvariable "VerifyAttestation.Owner")
+                repo=$(get_octopusvariable "VerifyAttestation.Repo")
+                flags=$(get_octopusvariable "VerifyAttestation.Flags")
+                printCommand=$(get_octopusvariable "VerifyAttestation.PrintCommand")
+                createArtifact=$(get_octopusvariable "VerifyAttestation.CreateArtifact")
+                deploymentId="#{Octopus.Deployment.Id | ToLower}"
+
+                export GITHUB_TOKEN="$token"
+
+                if ! command -v gh &> /dev/null; then
+                    echo "gh could not be found. Use an execution container image that includes it." 1>&2
+                    exit 1
+                fi
+
+                if [ -z "$token" ]; then
+                    fail_step "GitHub token is required."
+                fi
+
+                if [ -z "$owner" ] && [ -z "$repo" ]; then
+                    fail_step "Set either the GitHub owner or the GitHub repository."
+                fi
+
+                args=(attestation verify "$package" --format json)
+                [ -n "$owner" ] && args+=(--owner "$owner")
+                [ -n "$repo" ] && args+=(--repo "$repo")
+                # Flags are split on spaces on purpose.
+                # shellcheck disable=SC2206
+                [ -n "$flags" ] && args+=($flags)
+
+                if [ "$printCommand" = "True" ]; then
+                    echo "gh ${args[*]}"
+                fi
+
+                if json=$(gh "${args[@]}"); then
+                    set_octopusvariable "Json" "$json"
+                    echo "Attestation verified for $package"
+                    if [ "$createArtifact" = "True" ]; then
+                        echo "$json" > "$PWD/attestation-$deploymentId.json"
+                        new_octopusartifact "$PWD/attestation-$deploymentId.json"
+                    fi
+                else
+                    fail_step "Failed to verify attestation for $package"
+                fi
+                EOT
             Octopus.Action.Script.ScriptSource = "Inline"
             Octopus.Action.Script.Syntax = "Bash"
             VerifyAttestation.CreateArtifact = "#{Attestation.CreateArtifact}"
@@ -71,9 +136,10 @@ step "verify-package-attestation" {
             VerifyAttestation.Owner = "#{Attestation.Owner}"
             VerifyAttestation.Package = "Attestation.Package"
             VerifyAttestation.PrintCommand = "True"
-            VerifyAttestation.Repo = ""
+            VerifyAttestation.Repo = "#{Attestation.Repo}"
             VerifyAttestation.Token = "#{Attestation.Token}"
         }
+        worker_pool_variable = "#{Attestation.WorkerPool}"
 
         container {
             feed = "dockerhub-anonymous"
@@ -114,7 +180,7 @@ step "verify-package-attestation" {
                 display_settings = {
                     Octopus.ControlType = "SingleLineText"
                 }
-                help_text = "The `--repo` flag value. Leave blank. The community step passes the owner to `-R` when this is set."
+                help_text = "The `--repo` flag value."
                 label = "Repo"
                 default_value = ""
             }
