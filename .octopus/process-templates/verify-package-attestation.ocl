@@ -211,7 +211,7 @@ step "verify-package-attestation" {
 
         container {
             feed = "ghcr-authenticated"
-            image = "octopuslabs/github-workertools"
+            image = "octopusdeploylabs/github-workertools"
         }
 
         packages "VerifyAttestation.Package" {
