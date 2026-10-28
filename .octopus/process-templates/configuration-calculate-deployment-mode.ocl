@@ -1,0 +1,2 @@
+name = "Configuration - Calculate Deployment Mode"
+description = "Process template that manages deployment mode calculation, including wiring needed output variables."
