@@ -1321,8 +1321,9 @@ step "review-pending-migrations" {
                 }
                 $info = $stdout.Substring($start, $end - $start + 1) | ConvertFrom-Json
                 
-                $pendingStates = @("Pending", "Outdated")
-                $pending = @($info.migrations | Where-Object { $pendingStates -contains $_.state })
+                # Only Pending rows run. A changed R__ file shows twice: the applied row as
+                # Outdated and the file that runs as Pending. Counting both lists it twice.
+                $pending = @($info.migrations | Where-Object { $_.state -eq "Pending" })
                 
                 # ── Scan rules ─────────────────────────────────────────────────────────────
                 # Each rule maps to the expand and contract policy: the previous app version
