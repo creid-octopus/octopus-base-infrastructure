@@ -1,12 +1,12 @@
 name = "Predeploy Boilerplate"
 description = "Notifications, deployment mode calculation, and related predeploy constants."
 
-parameter "WorkerPool" {
+parameter "Predeploy.WorkerPool" {
     display_settings = {
         Octopus.ControlType = "WorkerPool"
     }
-    help_text = ""
-    label = ""
+    help_text = "Worker pool that runs the predeploy steps."
+    label = "Worker pool"
 }
 
 step "calculate-deployment-mode" {
@@ -14,6 +14,7 @@ step "calculate-deployment-mode" {
 
     action {
         action_type = "Octopus.Script"
+        notes = "Inline copy of the community step template Calculate Deployment Mode (CommunityActionTemplates-115, version 5). Sets DeploymentMode, VersionChange, Trigger, and the RunOn* run condition outputs."
         properties = {
             Octopus.Action.RunOnServer = "true"
             Octopus.Action.Script.ScriptBody = <<-EOT
@@ -209,11 +210,6 @@ step "calculate-deployment-mode" {
             Octopus.Action.Script.ScriptSource = "Inline"
             Octopus.Action.Script.Syntax = "PowerShell"
         }
-        worker_pool_variable = "#{WorkerPool}"
-
-        community_action_template_snapshot {
-            id = "CommunityActionTemplates-115"
-            version = 5
-        }
+        worker_pool_variable = "#{Predeploy.WorkerPool}"
     }
 }
