@@ -14,7 +14,7 @@ step "calculate-deployment-mode" {
 
     action {
         action_type = "Octopus.Script"
-        notes = "Inline copy of the community step template Calculate Deployment Mode (CommunityActionTemplates-115, version 5). Sets DeploymentMode, VersionChange, Trigger, and the RunOn* run condition outputs."
+        notes = "Inline copy of the community step template Calculate Deployment Mode (CommunityActionTemplates-115, version 5), with one change: a first deployment to an environment sets DeploymentMode to Deploy instead of throwing. Sets DeploymentMode, VersionChange, Trigger, IsFirstDeployment, and the RunOn* run condition outputs."
         properties = {
             Octopus.Action.RunOnServer = "true"
             Octopus.Action.Script.ScriptBody = <<-EOT
@@ -28,7 +28,22 @@ step "calculate-deployment-mode" {
                 Write-Host "The last succesful release to this environment was $previousReleaseNumber"
                 Write-Host "The last release that was attempted on this environment was $lastAttemptedReleaseNumber"
                 Write-Host "The deployment name is $deploymentName"
-                
+
+                # Not in the community version: the first deploy to an environment has no release to compare against.
+                # Every ephemeral environment starts this way. Without this guard, the [System.Version] casts below throw.
+                $isFirstDeployment = [string]::IsNullOrWhiteSpace($previousReleaseNumber) -and [string]::IsNullOrWhiteSpace($lastAttemptedReleaseNumber)
+                if ($isFirstDeployment)
+                {
+                	Write-Host "No release has been deployed to this environment before. This is the first deployment."
+                    $previousReleaseNumber = $currentReleaseNumber
+                    $lastAttemptedReleaseNumber = $currentReleaseNumber
+                }
+                elseif ([string]::IsNullOrWhiteSpace($previousReleaseNumber))
+                {
+                	Write-Host "No release has succeeded in this environment yet. Comparing against the last attempted release, $lastAttemptedReleaseNumber."
+                    $previousReleaseNumber = $lastAttemptedReleaseNumber
+                }
+
                 if ($previousReleaseNumber -like "*-*")
                 {
                 	$previousReleaseNumber = $previousReleaseNumber.SubString(0, $previousReleaseNumber.IndexOf("-"))
@@ -54,7 +69,12 @@ step "calculate-deployment-mode" {
                 
                 $differentVersions = $false
                 $versionToCompare = $previousVersion
-                if ($currentVersion -gt $previousVersion)
+                if ($isFirstDeployment)
+                {
+                	Write-Host "Setting deployment mode to deploy for the first deployment to this environment."
+                    $deploymentMode = "Deploy"
+                }
+                elseif ($currentVersion -gt $previousVersion)
                 {
                 	Write-Host "The current release number $currentReleaseNumber is greater than the previous successful release number $previousReleaseNumber."
                 	if ($currentVersion -lt $lastAttemptedVersion)
@@ -123,12 +143,14 @@ step "calculate-deployment-mode" {
                 Set-OctopusVariable -Name "DeploymentMode" -Value $deploymentMode
                 Set-OctopusVariable -Name "VersionChange" -Value $differenceKind
                 Set-OctopusVariable -Name "Trigger" -Value $trigger
-                
+                Set-OctopusVariable -Name "IsFirstDeployment" -Value $isFirstDeployment
+
                 Write-Highlight @"
                 Output Variables Created:
                    	- Octopus.Action[$($stepName)].Output.DeploymentMode - Set to '$deploymentMode'
                     - Octopus.Action[$($stepName)].Output.VersionChange - Set to '$differenceKind'
                     - Octopus.Action[$($stepName)].Output.Trigger - Set to '$trigger'
+                    - Octopus.Action[$($stepName)].Output.IsFirstDeployment - Set to '$isFirstDeployment'
                 
                 Deployment Mode Run Conditions Output Variables:
                    	- Octopus.Action[$($stepName)].Output.RunOnRollback
