@@ -1,0 +1,96 @@
+name = "Deployment Mode Debug"
+description = <<-EOT
+        Prints the outputs of Calculate Deployment Mode and checks that a run condition built from them resolves. Changes nothing. Add it after Predeploy Boilerplate while testing rollbacks, redeploys, or new run conditions, then remove it.
+
+        Runs two steps:
+
+        1. **Print deployment mode**: prints DeploymentMode, VersionChange, Trigger, every RunOn* output, and the release numbers the mode was calculated from.
+        2. **Check run condition**: runs only when the run condition parameter resolves to True. A skipped step means it resolved to False.
+        EOT
+
+icon {
+    color = "#2E475D"
+    id = "bug"
+}
+
+parameter "Debug.ModeStepName" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Full name of the Calculate Deployment Mode step. Inside a process template the name is the usage name, a dash, then the step name. With the default Predeploy Boilerplate usage that is Predeploy Boilerplate-Calculate Deployment Mode."
+    label = "Deployment mode step name"
+
+    value "Predeploy Boilerplate-Calculate Deployment Mode" {}
+}
+
+parameter "Debug.Condition" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Run condition to check. It should resolve to True or False. The default runs on deploy and redeploy and skips on rollback."
+    label = "Run condition"
+
+    value "#{Octopus.Action[#{Debug.ModeStepName}].Output.RunOnDeployOrRedeploy}" {}
+}
+
+parameter "Debug.WorkerPool" {
+    display_settings = {
+        Octopus.ControlType = "WorkerPool"
+    }
+    help_text = "Worker pool that runs the debug steps. Any worker that runs Bash works."
+    label = "Worker pool"
+}
+
+step "print-deployment-mode" {
+    name = "Print deployment mode"
+
+    action {
+        action_type = "Octopus.Script"
+        notes = "Prints the Calculate Deployment Mode outputs. Read only."
+        properties = {
+            Octopus.Action.Script.ScriptBody = <<-EOT
+                echo "Deployment mode step:     #{Debug.ModeStepName}"
+                echo "DeploymentMode:           #{Octopus.Action[#{Debug.ModeStepName}].Output.DeploymentMode}"
+                echo "VersionChange:            #{Octopus.Action[#{Debug.ModeStepName}].Output.VersionChange}"
+                echo "Trigger:                  #{Octopus.Action[#{Debug.ModeStepName}].Output.Trigger}"
+                echo ""
+                echo "RunOnDeploy:              #{Octopus.Action[#{Debug.ModeStepName}].Output.RunOnDeploy}"
+                echo "RunOnRedeploy:            #{Octopus.Action[#{Debug.ModeStepName}].Output.RunOnRedeploy}"
+                echo "RunOnRollback:            #{Octopus.Action[#{Debug.ModeStepName}].Output.RunOnRollback}"
+                echo "RunOnDeployOrRedeploy:    #{Octopus.Action[#{Debug.ModeStepName}].Output.RunOnDeployOrRedeploy}"
+                echo "RunOnDeployOrRollback:    #{Octopus.Action[#{Debug.ModeStepName}].Output.RunOnDeployOrRollback}"
+                echo "RunOnRedeployOrRollback:  #{Octopus.Action[#{Debug.ModeStepName}].Output.RunOnRedeployOrRollback}"
+                echo ""
+                echo "Run condition:            #{Debug.Condition}"
+                echo ""
+                echo "Release:                  #{Octopus.Release.Number}"
+                echo "Current for environment:  #{Octopus.Release.CurrentForEnvironment.Number}"
+                echo "Previous for environment: #{Octopus.Release.PreviousForEnvironment.Number}"
+
+                write_highlight "#{Octopus.Release.Number} to #{Octopus.Environment.Name} is a **#{Octopus.Action[#{Debug.ModeStepName}].Output.DeploymentMode}**. Run condition: #{Debug.Condition}"
+                EOT
+            Octopus.Action.Script.ScriptSource = "Inline"
+            Octopus.Action.Script.Syntax = "Bash"
+        }
+        worker_pool_variable = "#{Debug.WorkerPool}"
+    }
+}
+
+step "check-run-condition" {
+    condition = "Variable"
+    name = "Check run condition"
+    properties = {
+        Octopus.Step.ConditionVariableExpression = "#{Debug.Condition}"
+    }
+
+    action {
+        action_type = "Octopus.Script"
+        notes = "Runs only when the run condition parameter resolves to True. Read only."
+        properties = {
+            Octopus.Action.Script.ScriptBody = "write_highlight \"The run condition resolved to True, so this step ran.\""
+            Octopus.Action.Script.ScriptSource = "Inline"
+            Octopus.Action.Script.Syntax = "Bash"
+        }
+        worker_pool_variable = "#{Debug.WorkerPool}"
+    }
+}
