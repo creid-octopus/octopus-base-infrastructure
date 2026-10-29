@@ -2,7 +2,7 @@ name = "Postgres - Apply Flyway Migrations"
 description = <<-EOT
         Reviews and applies Flyway migrations to an existing Postgres database. Runs three steps in order:
         
-        1. **Review pending migrations**: lists what Flyway is about to run and scans it for risky SQL. Changes nothing. Always runs, so a policy can require it.
+        1. **Review pending migrations**: lists what Flyway is about to run and scans it for risky SQL. Flags hazards: applied migrations missing from the package, and repeatable migrations a rollback would apply again. Changes nothing. Always runs, so a policy can require it.
         2. **DBA review**: pauses for approval. Controlled by the review policy parameter.
         3. **Flyway - Migrate**: applies the migrations.
         
@@ -1262,17 +1262,20 @@ step "review-pending-migrations" {
 
     action {
         action_type = "Octopus.Script"
-        notes = "Runs flyway info and scans the pending files for risky SQL. Read only. Always runs, so a policy can require this step."
+        notes = "Runs flyway info, scans the pending files for risky SQL, and flags missing migrations and repeatable migrations a rollback would revert. Read only. Always runs, so a policy can require this step."
         properties = {
             Octopus.Action.RunOnServer = "true"
             Octopus.Action.Script.ScriptBody = <<-EOT
                 $ErrorActionPreference = "Stop"
                 
                 # Lists the migrations Flyway is about to apply and scans them for risky SQL.
-                # Changes nothing in the database. Sets three output variables for the review gate:
+                # Also flags hazards: applied migrations missing from the package, and repeatable
+                # migrations that a rollback would apply again from an older release.
+                # Changes nothing in the database. Sets four output variables for the review gate:
                 #   PendingCount  number of migrations that will run
                 #   RiskyCount    number of risky statements found
-                #   NeedsReview   True when RiskyCount is above zero
+                #   HazardCount   number of hazards found
+                #   NeedsReview   True when RiskyCount or HazardCount is above zero
                 #
                 # The scan is a text scan. It reads statements, not intent. A clean result does
                 # not prove a migration is safe. A finding does not prove it is unsafe.
@@ -1325,6 +1328,33 @@ step "review-pending-migrations" {
                 # Outdated and the file that runs as Pending. Counting both lists it twice.
                 $pending = @($info.migrations | Where-Object { $_.state -eq "Pending" })
                 
+                # ── Hazards ────────────────────────────────────────────────────────────────
+                # Missing: applied to the database but not in the package. Flyway validation fails,
+                # so migrate fails in every deployment mode.
+                # Future: applied and newer than the package. Expected after a rollback. Safe when
+                # every migration since was expand only.
+                $missing = @($info.migrations | Where-Object { $_.state -eq "Missing" })
+                $future = @($info.migrations | Where-Object { $_.state -eq "Future" })
+                
+                # A rollback deploys a release older than the last successful one in this environment.
+                # Compare the same way Calculate Deployment Mode does: drop the pre-release tag first.
+                # On a rollback, a pending repeatable migration applies an older version of its file
+                # again. Flyway info has no checksums, so the release numbers are the only signal.
+                function Get-BaseVersion($number) {
+                    if ([string]::IsNullOrWhiteSpace($number)) { return $null }
+                    $parsed = $null
+                    if ([System.Version]::TryParse(($number -split "-")[0], [ref]$parsed)) { return $parsed }
+                    return $null
+                }
+                $thisRelease = $OctopusParameters["Octopus.Release.Number"]
+                $lastRelease = $OctopusParameters["Octopus.Release.CurrentForEnvironment.Number"]
+                $thisVersion = Get-BaseVersion $thisRelease
+                $lastVersion = Get-BaseVersion $lastRelease
+                $isRollback = ($null -ne $thisVersion) -and ($null -ne $lastVersion) -and ($thisVersion -lt $lastVersion)
+                $reverts = @()
+                if ($isRollback) { $reverts = @($pending | Where-Object { $_.category -eq "Repeatable" }) }
+                $hazardCount = $missing.Count + $reverts.Count
+                
                 # ── Scan rules ─────────────────────────────────────────────────────────────
                 # Each rule maps to the expand and contract policy: the previous app version
                 # must still work after the migration.
@@ -1338,6 +1368,11 @@ step "review-pending-migrations" {
                     @{ Pattern = '\bALTER\s+COLUMN\b[\s\S]*\bTYPE\b'; Reason = 'can rewrite the table or fail on existing data' },
                     @{ Pattern = '\bADD\s+COLUMN\b(?![\s\S]*\bDEFAULT\b)[\s\S]*\bNOT\s+NULL\b'; Reason = 'a NOT NULL column without a default breaks inserts from the previous app' }
                 )
+                
+                function Get-Label($migration) {
+                    if ($migration.category -eq "Repeatable") { return "R: $($migration.description)" }
+                    return "V$($migration.version): $($migration.description)"
+                }
                 
                 function Get-MigrationFile($migration) {
                     if ($migration.filepath -and (Test-Path -LiteralPath $migration.filepath)) { return $migration.filepath }
@@ -1367,7 +1402,7 @@ step "review-pending-migrations" {
                 $rows = New-Object System.Collections.Generic.List[string]
                 
                 foreach ($migration in $pending) {
-                    $label = if ($migration.category -eq "Repeatable") { "R: $($migration.description)" } else { "V$($migration.version): $($migration.description)" }
+                    $label = Get-Label $migration
                     $file = Get-MigrationFile $migration
                     if ($null -eq $file) {
                         $rows.Add("| $label | not found in package |")
@@ -1394,8 +1429,13 @@ step "review-pending-migrations" {
                 $report = New-Object System.Collections.Generic.List[string]
                 $report.Add("### Flyway review for ``$dbName``")
                 $report.Add("")
+                if ($isRollback) {
+                    $report.Add("This deployment is a rollback. Release $thisRelease is older than $lastRelease, the last successful release here.")
+                    $report.Add("")
+                }
                 if ($pending.Count -eq 0) {
-                    $report.Add("No pending migrations. The database is up to date.")
+                    if ($missing.Count -gt 0) { $report.Add("No pending migrations.") }
+                    else { $report.Add("No pending migrations. The database is up to date.") }
                 }
                 else {
                     $report.Add("$($pending.Count) pending migration(s):")
@@ -1413,6 +1453,21 @@ step "review-pending-migrations" {
                         $report.Add("No risky statements found. This is a text scan, not proof that the migrations are safe.")
                     }
                 }
+                if ($hazardCount -gt 0) {
+                    $report.Add("")
+                    $report.Add("**$hazardCount hazard(s) found:**")
+                    $report.Add("")
+                    foreach ($migration in $missing) {
+                        $report.Add("- ``$(Get-Label $migration)`` is applied to the database but missing from this package. Flyway validation will fail, so migrate will fail.")
+                    }
+                    foreach ($migration in $reverts) {
+                        $report.Add("- ``$(Get-Label $migration)`` will apply again from this older release. It replaces the newer version in the database.")
+                    }
+                }
+                if ($future.Count -gt 0) {
+                    $report.Add("")
+                    $report.Add("$($future.Count) applied migration(s) are newer than this package. That is expected after a rollback, and safe when every migration since was expand only.")
+                }
                 $reportText = $report -join "`n"
                 
                 Write-Highlight $reportText
@@ -1422,7 +1477,8 @@ step "review-pending-migrations" {
                 
                 Set-OctopusVariable -Name "PendingCount" -Value "$($pending.Count)"
                 Set-OctopusVariable -Name "RiskyCount" -Value "$riskyCount"
-                Set-OctopusVariable -Name "NeedsReview" -Value $(if ($riskyCount -gt 0) { "True" } else { "False" })
+                Set-OctopusVariable -Name "HazardCount" -Value "$hazardCount"
+                Set-OctopusVariable -Name "NeedsReview" -Value $(if ($riskyCount -gt 0 -or $hazardCount -gt 0) { "True" } else { "False" })
                 EOT
             Octopus.Action.Script.ScriptSource = "Inline"
             Octopus.Action.Script.Syntax = "PowerShell"
