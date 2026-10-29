@@ -108,11 +108,12 @@ step "review-pending-migrations" {
                 # Lists the migrations Flyway is about to apply and scans them for risky SQL.
                 # Also flags hazards: applied migrations missing from the package, and repeatable
                 # migrations that a rollback would apply again from an older release.
-                # Changes nothing in the database. Sets four output variables for the review gate:
+                # Changes nothing in the database. Sets five output variables for the review gate:
                 #   PendingCount  number of migrations that will run
                 #   RiskyCount    number of risky statements found
                 #   HazardCount   number of hazards found
                 #   NeedsReview   True when RiskyCount or HazardCount is above zero
+                #   IsRollback    True when this release is older than the last successful one here
                 #
                 # The scan is a text scan. It reads statements, not intent. A clean result does
                 # not prove a migration is safe. A finding does not prove it is unsafe.
@@ -315,6 +316,7 @@ step "review-pending-migrations" {
                 Set-OctopusVariable -Name "PendingCount" -Value "$($pending.Count)"
                 Set-OctopusVariable -Name "RiskyCount" -Value "$riskyCount"
                 Set-OctopusVariable -Name "HazardCount" -Value "$hazardCount"
+                Set-OctopusVariable -Name "IsRollback" -Value $(if ($isRollback) { "True" } else { "False" })
                 Set-OctopusVariable -Name "NeedsReview" -Value $(if ($riskyCount -gt 0 -or $hazardCount -gt 0) { "True" } else { "False" })
                 EOT
             Octopus.Action.Script.ScriptSource = "Inline"
@@ -349,10 +351,19 @@ step "dba-review" {
 
     action {
         action_type = "Octopus.Manual"
-        notes = "Pauses for approval. Runs when the review policy says so. The pending migrations and any risky statements are in the task summary of the review step."
+        notes = "Pauses for approval. Runs when the review policy says so. The instructions say why it paused: a rollback, hazards, risky SQL, or the policy. The details are in the task summary of the review step."
         properties = {
             Octopus.Action.Manual.BlockConcurrentDeployments = "False"
-            Octopus.Action.Manual.Instructions = "Open the task summary of the Review pending migrations step. Check the pending migrations and any risky statements. Approve to apply them. Reject to stop the deployment."
+            Octopus.Action.Manual.Instructions = <<-EOT
+                **Why this paused:**
+                
+                #{if Octopus.Action[Review pending migrations].Output.IsRollback == "True"}- **This deployment is a rollback.** Release #{Octopus.Release.Number} is older than #{Octopus.Release.CurrentForEnvironment.Number}. Migrate runs with this older package. It doesn't undo applied migrations, and it can apply older repeatable migrations again.
+                #{/if}#{if Octopus.Action[Review pending migrations].Output.HazardCount != "0"}- **#{Octopus.Action[Review pending migrations].Output.HazardCount} hazard(s) found.** Migrate may fail or revert a repeatable migration.
+                #{/if}#{if Octopus.Action[Review pending migrations].Output.RiskyCount != "0"}- **#{Octopus.Action[Review pending migrations].Output.RiskyCount} risky statement(s) found** in the pending migrations.
+                #{/if}#{if Postgres.Review.Policy == "always"}#{if Octopus.Action[Review pending migrations].Output.IsRollback != "True"}- The review policy pauses every deployment.
+                #{/if}#{/if}
+                Open the task summary of the Review pending migrations step. Check the pending migrations, any risky statements, and any hazards. Approve to run migrate. Reject to stop the deployment.
+                EOT
             Octopus.Action.Manual.ResponsibleTeamIds = "global/everyone"
             Octopus.Action.RunOnServer = "false"
         }
