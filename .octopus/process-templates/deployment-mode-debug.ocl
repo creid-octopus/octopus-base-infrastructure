@@ -48,6 +48,7 @@ step "print-deployment-mode" {
         action_type = "Octopus.Script"
         notes = "Prints the Calculate Deployment Mode outputs. Read only."
         properties = {
+            Octopus.Action.RunOnServer = "true"
             Octopus.Action.Script.ScriptBody = <<-EOT
                 echo "Deployment mode step:     #{Debug.ModeStepName}"
                 echo "DeploymentMode:           #{Octopus.Action[#{Debug.ModeStepName}].Output.DeploymentMode}"
@@ -87,6 +88,7 @@ step "check-run-condition" {
         action_type = "Octopus.Script"
         notes = "Runs only when the run condition parameter resolves to True. Read only."
         properties = {
+            Octopus.Action.RunOnServer = "true"
             Octopus.Action.Script.ScriptBody = "write_highlight \"The run condition resolved to True, so this step ran.\""
             Octopus.Action.Script.ScriptSource = "Inline"
             Octopus.Action.Script.Syntax = "Bash"
