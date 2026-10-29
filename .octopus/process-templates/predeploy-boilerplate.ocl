@@ -1,5 +1,5 @@
 name = "Predeploy Boilerplate"
-description = "Notifications, deployment mode calculation, and related predeploy constants."
+description = "Notifications, deployment mode calculation, and related predeploy constants. Pauses for confirmation when the deployment is a rollback."
 
 parameter "Predeploy.WorkerPool" {
     display_settings = {
@@ -211,5 +211,38 @@ step "calculate-deployment-mode" {
             Octopus.Action.Script.Syntax = "PowerShell"
         }
         worker_pool_variable = "#{Predeploy.WorkerPool}"
+    }
+}
+
+step "confirm-rollback" {
+    condition = "Variable"
+    name = "Confirm rollback"
+    properties = {
+        Octopus.Step.ConditionVariableExpression = "#{if Octopus.Action[Calculate Deployment Mode].Output.DeploymentMode == \"Rollback\"}True#{else}False#{/if}"
+    }
+
+    action {
+        action_type = "Octopus.Manual"
+        notes = "Pauses only when Calculate Deployment Mode sets DeploymentMode to Rollback. Explains what a rollback does and does not undo, so the person who approves it knows the risk."
+        properties = {
+            Octopus.Action.Manual.BlockConcurrentDeployments = "False"
+            Octopus.Action.Manual.Instructions = <<-EOT
+                **This deployment is a rollback.** Release #{Octopus.Release.Number} is older than #{Octopus.Release.CurrentForEnvironment.Number}, the last successful release in #{Octopus.Environment.Name}.
+                
+                Rolling forward with a fix is almost always safer. Proceed only if you know what this rollback changes. See [The hotfix myth](https://octopus.com/blog/the-hotfix-myth).
+                
+                What a rollback does:
+                
+                - **It runs the old release's process.** The release keeps the process template versions from when it was created. Newer fixes, run conditions, and checks don't apply.
+                - **It does not roll back the database.** Versioned migrations stay applied. The older app runs against the newer schema. That's safe only if every migration since this release was expand only.
+                - **It can revert repeatable migrations.** If migrate runs, older `R__` files apply again without a warning. Views, functions, and procedures go back to the old version.
+                - **It can fail on migrations it doesn't know.** If an applied `R__` file is missing from the older package, Flyway validation fails and the deployment stops before the app changes.
+                - **It brings back the old app.** Bugs and vulnerabilities fixed since this release return.
+                
+                Approve to continue the rollback. Reject to stop it and roll forward instead.
+                EOT
+            Octopus.Action.Manual.ResponsibleTeamIds = "global/everyone"
+            Octopus.Action.RunOnServer = "false"
+        }
     }
 }
