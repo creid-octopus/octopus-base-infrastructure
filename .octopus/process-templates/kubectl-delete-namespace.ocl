@@ -1,0 +1,94 @@
+name = "kubectl - Delete Namespace"
+description = "`kubectl` script - delete a namespace and everything in it, if it exists. Refuses system namespaces and the protected environment. Use it to remove an ephemeral environment's namespace."
+
+parameter "Kubectl.DeleteNamespace.TargetTag" {
+    display_settings = {
+        Octopus.ControlType = "TargetTags"
+    }
+    help_text = "Deployment target tag of the cluster that holds the namespace."
+    label = "Kubernetes target tag for deployment"
+}
+
+parameter "Kubectl.DeleteNamespace.WorkerPool" {
+    display_settings = {
+        Octopus.ControlType = "WorkerPool"
+    }
+    help_text = ""
+    label = "Worker Pool"
+}
+
+parameter "Kubectl.DeleteNamespace.Name" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Namespace to delete. Everything in it is deleted too. Nothing happens if it doesn't exist."
+    label = "Namespace Name"
+}
+
+parameter "Kubectl.DeleteNamespace.ProtectedEnvironment" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Environment name where this step refuses to run. Leave blank to protect nothing."
+    label = "Protected environment"
+
+    value "Production" {}
+}
+
+parameter "Kubectl.DeleteNamespace.TimeoutSeconds" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "How long to wait for the namespace and its resources to finish deleting before the step fails."
+    label = "Timeout in seconds"
+
+    value "300" {}
+}
+
+step "delete-namespace" {
+    name = "Delete Namespace"
+    properties = {
+        Octopus.Action.TargetRoles = "#{Kubectl.DeleteNamespace.TargetTag}"
+    }
+
+    action {
+        action_type = "Octopus.KubernetesRunScript"
+        notes = "Deletes the namespace and waits until it's gone. Nothing happens if it doesn't exist. Refuses system namespaces and the protected environment."
+        properties = {
+            Octopus.Action.Script.ScriptBody = <<-EOT
+                #!/usr/bin/env bash
+                set -euo pipefail
+                NAMESPACE="$(get_octopusvariable "Kubectl.DeleteNamespace.Name")"
+                PROTECTED="$(get_octopusvariable "Kubectl.DeleteNamespace.ProtectedEnvironment")"
+                TIMEOUT="$(get_octopusvariable "Kubectl.DeleteNamespace.TimeoutSeconds")"
+                ENVIRONMENT_NAME="$(get_octopusvariable "Octopus.Environment.Name")"
+
+                if [[ -n "$PROTECTED" && "${ENVIRONMENT_NAME,,}" == "${PROTECTED,,}" ]]; then
+                  echo "Refusing to delete namespace '$NAMESPACE': '$ENVIRONMENT_NAME' is the protected environment."
+                  exit 1
+                fi
+
+                case "$NAMESPACE" in
+                  "" )
+                    echo "Refusing to delete: the namespace name is empty."
+                    exit 1 ;;
+                  default | kube-system | kube-public | kube-node-lease | octopus-agent-* )
+                    echo "Refusing to delete the system namespace '$NAMESPACE'."
+                    exit 1 ;;
+                esac
+
+                if ! kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
+                  echo "Namespace '$NAMESPACE' doesn't exist. Nothing to delete."
+                  exit 0
+                fi
+
+                echo "Deleting namespace '$NAMESPACE' and everything in it"
+                kubectl delete namespace "$NAMESPACE" --ignore-not-found --wait=true --timeout="${TIMEOUT}s"
+                echo "Done: namespace '$NAMESPACE' is gone"
+                EOT
+            Octopus.Action.Script.ScriptSource = "Inline"
+            Octopus.Action.Script.Syntax = "Bash"
+        }
+        worker_pool_variable = "#{Kubectl.DeleteNamespace.WorkerPool}"
+    }
+}
