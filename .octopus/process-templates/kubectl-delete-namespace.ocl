@@ -45,6 +45,14 @@ parameter "Kubectl.DeleteNamespace.TimeoutSeconds" {
     value "300" {}
 }
 
+parameter "Kubectl.DeleteNamespace.RunOnEnvironments" {
+    display_settings = {
+        Octopus.ControlType = "Environments"
+    }
+    help_text = ""
+    label = ""
+}
+
 step "delete-namespace" {
     name = "Delete Namespace"
     properties = {
@@ -53,6 +61,7 @@ step "delete-namespace" {
 
     action {
         action_type = "Octopus.KubernetesRunScript"
+        environments_variables = ["#{Kubectl.DeleteNamespace.RunOnEnvironments}"]
         notes = "Deletes the namespace and waits until it's gone. Nothing happens if it doesn't exist. Refuses system namespaces and the protected environment."
         properties = {
             Octopus.Action.Script.ScriptBody = <<-EOT
@@ -62,12 +71,12 @@ step "delete-namespace" {
                 PROTECTED="$(get_octopusvariable "Kubectl.DeleteNamespace.ProtectedEnvironment")"
                 TIMEOUT="$(get_octopusvariable "Kubectl.DeleteNamespace.TimeoutSeconds")"
                 ENVIRONMENT_NAME="$(get_octopusvariable "Octopus.Environment.Name")"
-
+                
                 if [[ -n "$PROTECTED" && "${ENVIRONMENT_NAME,,}" == "${PROTECTED,,}" ]]; then
                   echo "Refusing to delete namespace '$NAMESPACE': '$ENVIRONMENT_NAME' is the protected environment."
                   exit 1
                 fi
-
+                
                 case "$NAMESPACE" in
                   "" )
                     echo "Refusing to delete: the namespace name is empty."
@@ -76,12 +85,12 @@ step "delete-namespace" {
                     echo "Refusing to delete the system namespace '$NAMESPACE'."
                     exit 1 ;;
                 esac
-
+                
                 if ! kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
                   echo "Namespace '$NAMESPACE' doesn't exist. Nothing to delete."
                   exit 0
                 fi
-
+                
                 echo "Deleting namespace '$NAMESPACE' and everything in it"
                 kubectl delete namespace "$NAMESPACE" --ignore-not-found --wait=true --timeout="${TIMEOUT}s"
                 echo "Done: namespace '$NAMESPACE' is gone"
