@@ -10,7 +10,7 @@ parameter "KubernetesYaml.NamespaceTarget" {
     display_settings = {
         Octopus.ControlType = "SingleLineText"
     }
-    help_text = ""
+    help_text = "Default namespace for manifests that don't set one."
     label = "Deployment Namespace"
 }
 
@@ -18,7 +18,7 @@ parameter "KubernetesYaml.GitRepositoryUrl" {
     display_settings = {
         Octopus.ControlType = "SingleLineText"
     }
-    help_text = ""
+    help_text = "Repository that holds the manifests."
     label = "Git Repository URL"
 }
 
@@ -26,7 +26,7 @@ parameter "KuberenetesYaml.GitRepositoryFilePath" {
     display_settings = {
         Octopus.ControlType = "SingleLineText"
     }
-    help_text = ""
+    help_text = "Path or glob of the manifest files in the repository, such as `k8s/raw/development/*`. Octopus replaces `#{...}` variables in them before applying."
     label = "Manifest File Path"
 }
 
@@ -53,7 +53,7 @@ parameter "KubernetesYaml.TargetTag" {
     display_settings = {
         Octopus.ControlType = "TargetTags"
     }
-    help_text = ""
+    help_text = "Deployment target tag of the cluster to apply the manifests to."
     label = "Target Tag"
 }
 
@@ -61,7 +61,7 @@ parameter "KubernetesYaml.WorkerPool" {
     display_settings = {
         Octopus.ControlType = "WorkerPool"
     }
-    help_text = ""
+    help_text = "Worker pool that runs this step."
     label = "Worker Pool"
 }
 

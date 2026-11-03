@@ -26,7 +26,7 @@ parameter "Postgres.Server.Port" {
     display_settings = {
         Octopus.ControlType = "SingleLineText"
     }
-    help_text = ""
+    help_text = "Port Postgres listens on, usually 5432."
     label = "Server port"
 }
 

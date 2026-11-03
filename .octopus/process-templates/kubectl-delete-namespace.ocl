@@ -1,5 +1,5 @@
 name = "kubectl - Delete Namespace"
-description = "`kubectl` script - delete a namespace and everything in it, if it exists. Refuses system namespaces and the protected environment. Use it to remove an ephemeral environment's namespace."
+description = "`kubectl` script - delete a namespace and everything in it, if it exists. Runs only in the environments you choose. Refuses system namespaces and the protected environment. Use it to remove an ephemeral environment's namespace."
 
 parameter "Kubectl.DeleteNamespace.TargetTag" {
     display_settings = {
@@ -13,7 +13,7 @@ parameter "Kubectl.DeleteNamespace.WorkerPool" {
     display_settings = {
         Octopus.ControlType = "WorkerPool"
     }
-    help_text = ""
+    help_text = "Worker pool that runs this step."
     label = "Worker Pool"
 }
 
@@ -49,8 +49,8 @@ parameter "Kubectl.DeleteNamespace.RunOnEnvironments" {
     display_settings = {
         Octopus.ControlType = "Environments"
     }
-    help_text = ""
-    label = ""
+    help_text = "Environments where this step runs. It's skipped everywhere else. For ephemeral environments, choose the parent environment."
+    label = "Run in environments"
 }
 
 step "delete-namespace" {
@@ -62,7 +62,7 @@ step "delete-namespace" {
     action {
         action_type = "Octopus.KubernetesRunScript"
         environments_variables = ["#{Kubectl.DeleteNamespace.RunOnEnvironments}"]
-        notes = "Deletes the namespace and waits until it's gone. Nothing happens if it doesn't exist. Refuses system namespaces and the protected environment."
+        notes = "Runs only in the environments chosen in Run in environments. Deletes the namespace and waits until it's gone. Nothing happens if it doesn't exist. Refuses system namespaces and the protected environment."
         properties = {
             Octopus.Action.Script.ScriptBody = <<-EOT
                 #!/usr/bin/env bash

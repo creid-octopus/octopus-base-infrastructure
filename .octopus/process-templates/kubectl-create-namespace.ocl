@@ -13,7 +13,7 @@ parameter "Kubectl.CreateNamespace.WorkerPool" {
     display_settings = {
         Octopus.ControlType = "WorkerPool"
     }
-    help_text = ""
+    help_text = "Worker pool that runs this step."
     label = "Worker Pool"
 }
 

@@ -26,7 +26,7 @@ parameter "Postgres.Server.Port" {
     display_settings = {
         Octopus.ControlType = "SingleLineText"
     }
-    help_text = ""
+    help_text = "Port Postgres listens on, usually 5432."
     label = "Server port"
 }
 
@@ -50,8 +50,8 @@ parameter "Postgres.Admin" {
     display_settings = {
         Octopus.ControlType = "UsernamePasswordAccount"
     }
-    help_text = ""
-    label = "Administrator Postgres Account"
+    help_text = "Server administrator login. This step uses it to change logins, databases, and grants. Never use it for the app."
+    label = "Postgres Administrator Account"
 
     value "postgres-local-admin" {}
 }

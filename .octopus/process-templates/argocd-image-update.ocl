@@ -1,5 +1,5 @@
 name = "ArgoCD Image Update"
-description = ""
+description = "Updates the image tags in this project's Argo CD applications, then waits until the applications report healthy. Commits the change directly, except in the environments that require a pull request."
 
 icon {
     color = "#C45317"
@@ -10,7 +10,7 @@ parameter "ArgoCD.Package" {
     display_settings = {
         Octopus.ControlType = "Package"
     }
-    help_text = ""
+    help_text = "Image whose new tag is written to the Argo CD applications. The release's version of this package is the tag."
     label = "ArgoCD Package"
 }
 
@@ -18,15 +18,15 @@ parameter "ArgoCD.WorkerPool" {
     display_settings = {
         Octopus.ControlType = "WorkerPool"
     }
-    help_text = ""
-    label = ""
+    help_text = "Worker pool that runs this step."
+    label = "Worker Pool"
 }
 
 parameter "ArgoCD.PullRequestEnvironments" {
     display_settings = {
         Octopus.ControlType = "Environments"
     }
-    help_text = ""
+    help_text = "Environments where the update opens a pull request instead of committing directly. Other environments get a direct commit."
     label = "Environments requiring pull request approval for ArgoCD Updates"
 }
 
