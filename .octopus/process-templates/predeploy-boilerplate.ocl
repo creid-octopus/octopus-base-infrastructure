@@ -1,5 +1,5 @@
 name = "Predeploy Boilerplate"
-description = "Notifications, deployment mode calculation, and related predeploy constants. Pauses for confirmation when the deployment is a rollback."
+description = "Runs first in every deployment. Calculates the deployment mode (Deploy, Redeploy, or Rollback) and outputs it for later steps. Pauses for confirmation when the deployment is a rollback. Notifications are separate templates."
 
 parameter "Predeploy.WorkerPool" {
     display_settings = {
