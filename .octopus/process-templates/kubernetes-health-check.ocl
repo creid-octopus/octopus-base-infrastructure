@@ -1,0 +1,162 @@
+name = "Kubernetes - Health Check"
+description = "Calls the app's health endpoint from inside the cluster after a deployment, and fails the deployment when the app isn't healthy or is connected to the wrong database. Runs on the Kubernetes agent, so it reaches in-cluster addresses with no port-forward."
+
+parameter "HealthCheck.TargetTag" {
+    display_settings = {
+        Octopus.ControlType = "TargetTags"
+    }
+    help_text = "Deployment target tag of the cluster the app runs in. The check runs in a script pod on that cluster."
+    label = "Kubernetes target tag"
+}
+
+parameter "HealthCheck.BaseUrl" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Base URL to call, with no path. To test the Ingress rule from inside the cluster, use the ingress controller's Service, such as `http://ingress-nginx-controller.ingress-nginx.svc.cluster.local:8080`, and set Host header. On a cluster with a public URL, use the app's URL and leave Host header blank."
+    label = "Base URL"
+}
+
+parameter "HealthCheck.HostHeader" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Host header sent with the request, so the ingress controller routes it to the app. Leave blank to send none."
+    is_optional = true
+    label = "Host header"
+}
+
+parameter "HealthCheck.Path" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Path of the health endpoint. It must return JSON with a `status` of `ok`."
+    label = "Health path"
+
+    value "/health/db" {}
+}
+
+parameter "HealthCheck.ExpectedDatabase" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Database the app must report in the `database` field. Leave blank to skip the check."
+    is_optional = true
+    label = "Expected database"
+}
+
+parameter "HealthCheck.ExpectedUser" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Login the app must report in the `user` field. Use the app login. Leave blank to skip the check."
+    is_optional = true
+    label = "Expected app login"
+}
+
+parameter "HealthCheck.Attempts" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "How many times to call the endpoint before the step fails. Covers pods that are still starting."
+    label = "Attempts"
+
+    value "10" {}
+}
+
+parameter "HealthCheck.DelaySeconds" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Seconds to wait between attempts."
+    label = "Delay between attempts"
+
+    value "6" {}
+}
+
+step "health-check" {
+    name = "Health Check"
+    properties = {
+        Octopus.Action.TargetRoles = "#{HealthCheck.TargetTag}"
+    }
+
+    action {
+        action_type = "Octopus.KubernetesRunScript"
+        notes = "Retries while the app is unreachable or not ok. Fails at once when the app is ok but reports the wrong database or login, because waiting won't fix that. Outputs SchemaVersion, Database, and User."
+        properties = {
+            Octopus.Action.Script.ScriptBody = <<-EOT
+                #!/usr/bin/env bash
+                set -uo pipefail
+                BASE_URL="$(get_octopusvariable "HealthCheck.BaseUrl")"
+                HOST_HEADER="$(get_octopusvariable "HealthCheck.HostHeader")"
+                CHECK_PATH="$(get_octopusvariable "HealthCheck.Path")"
+                EXPECTED_DB="$(get_octopusvariable "HealthCheck.ExpectedDatabase")"
+                EXPECTED_USER="$(get_octopusvariable "HealthCheck.ExpectedUser")"
+                ATTEMPTS="$(get_octopusvariable "HealthCheck.Attempts")"
+                DELAY="$(get_octopusvariable "HealthCheck.DelaySeconds")"
+
+                for tool in curl jq; do
+                  command -v "$tool" >/dev/null || { echo "Missing tool: $tool"; exit 1; }
+                done
+
+                url="${BASE_URL%/}/${CHECK_PATH#/}"
+                curl_args=(-sS --max-time 5 -o /tmp/health-body -w '%{http_code}')
+                if [[ -n "$HOST_HEADER" ]]; then
+                  curl_args+=(-H "Host: $HOST_HEADER")
+                  echo "Checking $url with Host: $HOST_HEADER"
+                else
+                  echo "Checking $url"
+                fi
+                [[ -n "$EXPECTED_DB" ]] && echo "Expecting database $EXPECTED_DB"
+                [[ -n "$EXPECTED_USER" ]] && echo "Expecting app login $EXPECTED_USER"
+
+                reason="no attempts made"
+                for ((attempt = 1; attempt <= ATTEMPTS; attempt++)); do
+                  : > /tmp/health-body
+                  code="$(curl "${curl_args[@]}" "$url" 2>/tmp/health-err)" || code="000"
+                  body="$(cat /tmp/health-body)"
+
+                  if [[ "$code" == "000" ]]; then
+                    reason="no response: $(cat /tmp/health-err)"
+                  elif ! jq -e . >/dev/null 2>&1 <<<"$body"; then
+                    flat="$(tr -s '\n\t ' ' ' <<<"$body")"
+                    reason="HTTP $code, body isn't JSON: ${flat:0:120}"
+                    if [[ "$code" == "404" && -n "$HOST_HEADER" ]]; then
+                      reason="$reason (a 404 from the ingress controller usually means no Ingress rule matches $HOST_HEADER)"
+                    fi
+                  else
+                    status="$(jq -r '.status // "missing"' <<<"$body")"
+                    db="$(jq -r '.database // ""' <<<"$body")"
+                    user="$(jq -r '.user // ""' <<<"$body")"
+                    schema="$(jq -r '.schemaVersion // ""' <<<"$body")"
+
+                    if [[ "$code" == "200" && "$status" == "ok" ]]; then
+                      if [[ -n "$EXPECTED_DB" && "$db" != "$EXPECTED_DB" ]]; then
+                        echo "Wrong database: the app reports '$db', expected '$EXPECTED_DB'."
+                        exit 1
+                      fi
+                      if [[ -n "$EXPECTED_USER" && "$user" != "$EXPECTED_USER" ]]; then
+                        echo "Wrong login: the app reports '$user', expected '$EXPECTED_USER'."
+                        exit 1
+                      fi
+                      set_octopusvariable "SchemaVersion" "$schema"
+                      set_octopusvariable "Database" "$db"
+                      set_octopusvariable "User" "$user"
+                      write_highlight "Healthy on attempt $attempt: schema $schema, $db as $user"
+                      exit 0
+                    fi
+                    reason="HTTP $code, status $status"
+                  fi
+
+                  echo "Attempt $attempt of $ATTEMPTS: $reason"
+                  (( attempt < ATTEMPTS )) && sleep "$DELAY"
+                done
+
+                echo "The app isn't healthy after $ATTEMPTS attempts. Last result: $reason"
+                exit 1
+                EOT
+            Octopus.Action.Script.ScriptSource = "Inline"
+            Octopus.Action.Script.Syntax = "Bash"
+        }
+    }
+}
