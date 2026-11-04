@@ -16,7 +16,7 @@ parameter "Slack.PostDeploy.ReleaseLink" {
     display_settings = {
         Octopus.ControlType = "SingleLineText"
     }
-    help_text = "Slack-formatted link to what ran. The default links to the release for a deployment, or to the runbook snapshot for a runbook run (blank for a runbook stored in Git, which has no snapshot)."
+    help_text = "Slack-formatted link to what ran. The default links to the release for a deployment, or to the runbook snapshot for a runbook run. Runbooks stored in Git get a snapshot on each run too."
     is_optional = true
     label = "Release link"
 
@@ -48,7 +48,7 @@ step "slack-deployment-complete" {
 
     action {
         action_type = "Octopus.SendSlackMessage"
-        notes = "Works for deployments and runbook runs. Octopus.RunbookRun.Id only exists in a runbook run, so each part that differs switches on it. Runbook runs show the snapshot name, or the branch and commit for a runbook stored in Git."
+        notes = "Works for deployments and runbook runs. Octopus.RunbookRun.Id only exists in a runbook run, so each part that differs switches on it. Runbook runs show the snapshot name. If a run has no snapshot, they show the branch and commit instead."
         properties = {
             Octopus.Action.Slack.Blocks = <<-EOT
                 [
