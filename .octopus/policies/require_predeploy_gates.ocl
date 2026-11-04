@@ -1,0 +1,53 @@
+name = "Require Predeploy Gates"
+description = "Checks that every deployment runs the Predeploy Boilerplate process template with its gates in place: Calculate Deployment Mode always runs, and the rollback and AI-assisted review pauses are enabled and not skipped."
+violation_action = "warn"
+violation_reason = "Deployments must run the `Predeploy Boilerplate` process template, version 2 or later, with its gates enabled and not skipped."
+
+conditions {
+    rego = <<-EOT
+            package require_predeploy_gates
+
+            # A policy can't read release custom fields, so it can't tell an
+            # AI-assisted release apart. It requires the step that can: the
+            # Confirm AI-assisted release pause, which reads AIAssisted itself.
+            # The pauses are conditional by design, so they only need to be
+            # present, enabled, and not skipped. Calculate Deployment Mode
+            # feeds their conditions, so it must also be unconditional.
+
+            default result := {
+                "allowed": false,
+                "reason": "Run the Predeploy Boilerplate process template (version 2 or later). Keep Calculate Deployment Mode, Confirm rollback, and Confirm AI-assisted release enabled, and don't skip them.",
+            }
+
+            result := {"allowed": true} if {
+                mode := gate("calculate-deployment-mode")
+                mode.IsConditional == false
+                gate("confirm-rollback")
+                gate("confirm-ai-assisted-release")
+            }
+
+            # A step from the template whose expanded id ends with the template
+            # step slug, enabled and not skipped.
+            gate(slug) := step if {
+                some step in input.Steps
+                step.Source.Type == "Process Template"
+                step.Source.SlugOrId == "predeploy-boilerplate"
+                endswith(step.Id, slug)
+                step.Enabled == true
+                not step.Id in input.SkippedSteps
+            }
+            EOT
+}
+
+scope {
+    rego = <<-EOT
+            package require_predeploy_gates
+
+            default evaluate := false
+
+            # Deployments only. Runbook runs have no deployment mode.
+            evaluate if {
+                not input.Runbook
+            }
+            EOT
+}

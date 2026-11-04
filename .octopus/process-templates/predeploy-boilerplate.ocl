@@ -1,5 +1,5 @@
 name = "Predeploy Boilerplate"
-description = "Runs first in every deployment. Calculates the deployment mode (Deploy, Redeploy, or Rollback) and outputs it for later steps. Pauses for confirmation when the deployment is a rollback. Notifications are separate templates."
+description = "Runs first in every deployment. Calculates the deployment mode (Deploy, Redeploy, or Rollback) and outputs it for later steps. Pauses for confirmation when the deployment is a rollback, and for review when an AI-assisted release first reaches a chosen environment. Notifications are separate templates."
 
 parameter "Predeploy.WorkerPool" {
     display_settings = {
@@ -7,6 +7,14 @@ parameter "Predeploy.WorkerPool" {
     }
     help_text = "Worker pool that runs the predeploy steps."
     label = "Worker pool"
+}
+
+parameter "Predeploy.AIReview.RunEnvs" {
+    display_settings = {
+        Octopus.ControlType = "Environments"
+    }
+    help_text = "Environments where an AI-assisted release pauses for review. Choose the shared environments, such as Test and Production. Leave out Development and the ephemeral parent environment, where CI deploys without anyone watching."
+    label = "AI review environments"
 }
 
 step "calculate-deployment-mode" {
@@ -262,6 +270,37 @@ step "confirm-rollback" {
                 - **It brings back the old app.** Bugs and vulnerabilities fixed since this release return.
                 
                 Approve to continue the rollback. Reject to stop it and roll forward instead.
+                EOT
+            Octopus.Action.Manual.ResponsibleTeamIds = "global/everyone"
+            Octopus.Action.RunOnServer = "false"
+        }
+    }
+}
+
+step "confirm-ai-assisted-release" {
+    condition = "Variable"
+    name = "Confirm AI-assisted release"
+    properties = {
+        Octopus.Step.ConditionVariableExpression = "#{if Octopus.Release.CustomFields[AIAssisted] == \"true\"}#{if Octopus.Action[Calculate Deployment Mode].Output.DeploymentMode == \"Deploy\"}True#{else}False#{/if}#{else}False#{/if}"
+    }
+
+    action {
+        action_type = "Octopus.Manual"
+        environments_variables = ["#{Predeploy.AIReview.RunEnvs}"]
+        notes = "Pauses only in the AI review environments, when the release's AIAssisted custom field is true and Calculate Deployment Mode sets DeploymentMode to Deploy. A redeploy or rollback of a release already reviewed in this environment doesn't pause again. A policy can't read release custom fields, so this step reads the field and a policy requires this step."
+        properties = {
+            Octopus.Action.Manual.BlockConcurrentDeployments = "False"
+            Octopus.Action.Manual.Instructions = <<-EOT
+                **This release is AI-assisted.** Release #{Octopus.Release.Number} is going to #{Octopus.Environment.Name}#{if Octopus.Deployment.Tenant.Name} for #{Octopus.Deployment.Tenant.Name}#{/if}, and its `AIAssisted` custom field is `true`. CI sets it when a commit has an AI co-author trailer or the pull request has the `ai-assisted` label.
+
+                Before you approve, review what changed:
+
+                - [Release #{Octopus.Release.Number}](#{Octopus.Web.ServerUri}#{Octopus.Web.ReleaseLink}): the commits, work items, and packages in it.#{if Octopus.Release.CustomFields[PullRequestNumber]}
+                - Pull request #{Octopus.Release.CustomFields[PullRequestNumber]}.#{/if}#{if Octopus.Release.CustomFields[GIT_COMMIT_SHA]}
+                - Commit `#{Octopus.Release.CustomFields[GIT_COMMIT_SHA] | Substring 7}`.#{/if}
+                - The deploy process and migrations a human would normally review. AI-assisted changes can look right and still be wrong.
+
+                Approve to continue the deployment. Reject to stop it.
                 EOT
             Octopus.Action.Manual.ResponsibleTeamIds = "global/everyone"
             Octopus.Action.RunOnServer = "false"
