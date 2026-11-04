@@ -1,5 +1,5 @@
 name = "Notifications - PreDeploy"
-description = "Standardized predeployment notification step(s)."
+description = "Standardized Slack notification for the start of a deployment or a runbook run. One template covers both, the same way Notifications - PostDeploy does."
 
 parameter "Parameters.CustomMessage" {
     display_settings = {
@@ -32,20 +32,20 @@ parameter "Slack.PreDeploy.ReleaseLink" {
     display_settings = {
         Octopus.ControlType = "SingleLineText"
     }
-    help_text = "Slack-formatted link to the release. The default links to this release in Octopus."
+    help_text = "Slack-formatted link to what is about to run. The default links to the release for a deployment, or to the runbook snapshot for a runbook run. Used in the plain-text fallback message."
     label = "Release link"
 
-    value "<#{Octopus.Web.ServerUri}#{Octopus.Web.ReleaseLink}|#{Octopus.Release.Number}>" {}
+    value "#{if Octopus.RunbookRun.Id}#{if Octopus.RunbookSnapshot.Id}<#{Octopus.Web.ServerUri}#{Octopus.Web.RunbookSnapshotLink}|#{Octopus.RunbookSnapshot.Name}>#{/if}#{else}<#{Octopus.Web.ServerUri}#{Octopus.Web.ReleaseLink}|#{Octopus.Release.Number}>#{/if}" {}
 }
 
 parameter "Slack.PreDeploy.DeploymentLink" {
     display_settings = {
         Octopus.ControlType = "SingleLineText"
     }
-    help_text = "Slack-formatted link to the deployment. The default links to this deployment in Octopus."
+    help_text = "Slack-formatted link to this run. The default links to the deployment, or to the runbook run. Used in the plain-text fallback message."
     label = "Deployment link"
 
-    value "<#{Octopus.Web.ServerUri}#{Octopus.Web.DeploymentLink}|#{Octopus.Deployment.Id}>" {}
+    value "#{if Octopus.RunbookRun.Id}<#{Octopus.Web.ServerUri}#{Octopus.Web.RunbookRunLink}|#{Octopus.RunbookRun.Name}>#{else}<#{Octopus.Web.ServerUri}#{Octopus.Web.DeploymentLink}|#{Octopus.Deployment.Id}>#{/if}" {}
 }
 
 step "slack-deployment-starting" {
@@ -54,60 +54,68 @@ step "slack-deployment-starting" {
     action {
         action_type = "Octopus.SendSlackMessage"
         environments_variables = ["#{Slack.Predeploy.RunEnvs}"]
+        notes = "Works for deployments and runbook runs. Octopus.RunbookRun.Id only exists in a runbook run, so each part that differs switches on it. Buttons use url, not value. A button without a url is interactive, and Slack sends the click to the app's interactivity URL, which this app doesn't have."
         properties = {
             Octopus.Action.Slack.Blocks = <<-EOT
-                	[
-                		{
-                			"type": "section",
-                			"text": {
-                				"type": "mrkdwn",
-                				"text": ":construction: #{Slack.PreDeploy.ProjectLink | JsonEscape} #{Octopus.Release.Number | JsonEscape} to #{Octopus.Environment.Name}#{if Parameters.CustomMessage}\n\nCustom Message: #{Parameters.CustomMessage | JsonEscape}#{/if}"
-                			}
-                		},
-                		{
-                			"type": "divider"
-                		},
-                		{
-                			"type": "actions",
-                			"elements": [
+                [
+                	{
+                		"type": "section",
+                		"text": {
+                			"type": "mrkdwn",
+                			"text": ":construction: #{Slack.PreDeploy.ProjectLink | JsonEscape} #{if Octopus.RunbookRun.Id}running *#{Octopus.Runbook.Name | JsonEscape}* #{if Octopus.RunbookSnapshot.Name}(#{Octopus.RunbookSnapshot.Name | JsonEscape}) #{else}#{if Octopus.RunbookRun.Git.BranchName}(#{Octopus.RunbookRun.Git.BranchName | JsonEscape}@#{Octopus.RunbookRun.Git.CommitHash | Substring 7}) #{/if}#{/if}in#{else}#{Octopus.Release.Number | JsonEscape} to#{/if} #{Octopus.Environment.Name | JsonEscape}#{if Octopus.Deployment.Tenant.Name} for #{Octopus.Deployment.Tenant.Name | JsonEscape}#{/if}#{if Parameters.CustomMessage}\n\nCustom Message: #{Parameters.CustomMessage | JsonEscape}#{/if}"
+                		}
+                	},
+                	{ "type": "divider" },
+                	{
+                		"type": "actions",
+                		"elements": [
+                			#{if Octopus.RunbookRun.Id}
+                				#{if Octopus.RunbookSnapshot.Id}
                 				{
                 					"type": "button",
-                					"text": {
-                						"type": "plain_text",
-                						"text": ":mag_right:View Release",
-                						"emoji": true
-                					},
-                					"value": "#{Slack.PreDeploy.ReleaseLink | JsonEscape}",
+                					"text": { "type": "plain_text", "text": ":mag_right: View Snapshot", "emoji": true },
+                					"url": "#{Octopus.Web.ServerUri | JsonEscape}#{Octopus.Web.RunbookSnapshotLink | JsonEscape}",
+                					"action_id": "actionId-snapshot"
+                				},
+                				#{/if}
+                				{
+                					"type": "button",
+                					"text": { "type": "plain_text", "text": ":microscope: View Runbook Run", "emoji": true },
+                					"url": "#{Octopus.Web.ServerUri | JsonEscape}#{Octopus.Web.RunbookRunLink | JsonEscape}",
+                					"action_id": "actionId-runbook-run"
+                				}
+                			#{else}
+                				{
+                					"type": "button",
+                					"text": { "type": "plain_text", "text": ":mag_right: View Release", "emoji": true },
+                					"url": "#{Octopus.Web.ServerUri | JsonEscape}#{Octopus.Web.ReleaseLink | JsonEscape}",
                 					"action_id": "actionId-release"
                 				},
                 				{
                 					"type": "button",
-                					"text": {
-                						"type": "plain_text",
-                						"text": ":microscope:View Deployment",
-                						"emoji": true
-                					},
-                					"value": "#{Slack.PreDeploy.DeploymentLink | JsonEscape}",
+                					"text": { "type": "plain_text", "text": ":microscope: View Deployment", "emoji": true },
+                					"url": "#{Octopus.Web.ServerUri | JsonEscape}#{Octopus.Web.DeploymentLink | JsonEscape}",
                 					"action_id": "actionId-deployment"
                 				}
-                			]
-                		}
-                	]
+                			#{/if}
+                		]
+                	}
+                ]
                 EOT
             Octopus.Action.Slack.ChannelIds = "C0BNWQXANAG"
             Octopus.Action.Slack.ChannelNames = "new-releases"
             Octopus.Action.Slack.Message = <<-EOT
-                :construction: Deployment starting for  
-                 #{Slack.PreDeploy.ProjectLink} to #{Octopus.Environment.Name} 
-                
-                #{Slack.PreDeploy.ReleaseLink} | #{Slack.PreDeploy.DeploymentLink}
-                
+                #{if Octopus.RunbookRun.Id}:construction: Runbook run starting for#{else}:construction: Deployment starting for#{/if}
+                #{Slack.PreDeploy.ProjectLink} #{if Octopus.RunbookRun.Id}running #{Octopus.Runbook.Name} in#{else}to#{/if} #{Octopus.Environment.Name}#{if Octopus.Deployment.Tenant.Name} for #{Octopus.Deployment.Tenant.Name}#{/if}
+
+                #{if Slack.PreDeploy.ReleaseLink}#{Slack.PreDeploy.ReleaseLink} | #{/if}#{Slack.PreDeploy.DeploymentLink}
+
                 #{if Parameters.CustomMessage}
                 Custom: #{Parameters.CustomMessage}
                 #{/if}
                 EOT
             Octopus.Action.Slack.MessageFormat = "BlockKit"
-            Octopus.Action.Slack.Title = "Deployment Starting"
+            Octopus.Action.Slack.Title = "#{if Octopus.RunbookRun.Id}Runbook Starting#{else}Deployment Starting#{/if}"
         }
     }
 }
