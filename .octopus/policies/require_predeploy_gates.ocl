@@ -20,22 +20,41 @@ conditions {
             }
 
             result := {"allowed": true} if {
-                mode := gate("calculate-deployment-mode")
-                mode.IsConditional == false
-                gate("confirm-rollback")
-                gate("confirm-ai-assisted-release")
+                count(mode_steps) > 0
+                count(rollback_steps) > 0
+                count(ai_review_steps) > 0
+
+                every step in boilerplate_steps {
+                    step.Enabled == true
+                    not step.Id in input.SkippedSteps
+                }
+
+                every step in mode_steps {
+                    step.IsConditional == false
+                }
             }
 
-            # A step from the template whose expanded id ends with the template
-            # step slug, enabled and not skipped.
-            gate(slug) := step if {
+            boilerplate_steps := [step |
                 some step in input.Steps
                 step.Source.Type == "Process Template"
                 step.Source.SlugOrId == "predeploy-boilerplate"
-                endswith(step.Id, slug)
-                step.Enabled == true
-                not step.Id in input.SkippedSteps
-            }
+            ]
+
+            # Expanded step ids end with the template step slug.
+            mode_steps := [step |
+                some step in boilerplate_steps
+                endswith(step.Id, "calculate-deployment-mode")
+            ]
+
+            rollback_steps := [step |
+                some step in boilerplate_steps
+                endswith(step.Id, "confirm-rollback")
+            ]
+
+            ai_review_steps := [step |
+                some step in boilerplate_steps
+                endswith(step.Id, "confirm-ai-assisted-release")
+            ]
             EOT
 }
 
