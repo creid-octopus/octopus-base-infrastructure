@@ -1,33 +1,51 @@
 name = "Confirm Latest Predeploy Boilerplate Versioning"
-description = "Check that a Process Template is of a minimum version when deploying"
-violation_action = "block"
-violation_reason = "The required process template version is not used"
+description = "Warns when a deployment runs a Predeploy Boilerplate version older than 2.0.0. Platform Hub doesn't show which projects use which template version, so this policy's evaluations do: every warning names a project that still needs to move its usage to 2.X."
+violation_action = "warn"
+violation_reason = "This deployment uses a Predeploy Boilerplate version older than 2.0.0. Update the usage's version mask to 2.X and create a new release."
 
 conditions {
     rego = <<-EOT
             package confirm_latest_predeploy_boilerplate_versioning
-            
-            # Default: Deny all deployments
-            default result := {"allowed": false}
-            
-            # Allow: Specific Process Template Version is present, active, and not skipped
+
+            # Every step that comes from Predeploy Boilerplate reports the
+            # template version the release resolved, such as 1.2.0. A release
+            # keeps the versions from when it was created, so a project only
+            # passes after it creates a release from a 2.X usage.
+
+            default result := {
+                "allowed": false,
+                "reason": "Predeploy Boilerplate didn't report a valid semantic version. Check the usage's version mask.",
+            }
+
             result := {"allowed": true} if {
-            	some step in input.Steps
-            	
-            	# Ensure the step is derived from a Process Template
-            	step.Source.Type == "Process Template"
-            	
-            	# Target a specific template by its unique slug or I
-            	step.Source.SlugOrId == "<ProcessTemplate-slug>"
-            	
-            	# Verify the template version matches the required baseline exactly
-            	semver.compare(step.Source.Version, "<specific-version>") == 0
-            	
-            	# Ensure the required step is not in the deployment skip list
-            	not step.Id in input.SkippedSteps
-            	
-            	# Verify the step is currently enabled in the process
-            	step.Enabled == true
+                all_current
+            }
+
+            result := {
+                "allowed": false,
+                "reason": sprintf("Predeploy Boilerplate %v is older than 2.0.0. Update the usage's version mask to 2.X and create a new release.", [concat(", ", old_versions)]),
+            } if {
+                count(old_versions) > 0
+            }
+
+            boilerplate_versions := {step.Source.Version |
+                some step in input.Steps
+                step.Source.Type == "Process Template"
+                step.Source.SlugOrId == "predeploy-boilerplate"
+            }
+
+            old_versions := {version |
+                some version in boilerplate_versions
+                semver.is_valid(version)
+                semver.compare(version, "2.0.0") < 0
+            }
+
+            all_current if {
+                count(boilerplate_versions) > 0
+                every version in boilerplate_versions {
+                    semver.is_valid(version)
+                    semver.compare(version, "2.0.0") >= 0
+                }
             }
             EOT
 }
@@ -35,17 +53,16 @@ conditions {
 scope {
     rego = <<-EOT
             package confirm_latest_predeploy_boilerplate_versioning
-            
-            default evaluate := true
-            
-            # The following are examples of available scoping options:
-            # evaluate if {    
-            	# Scope evaluation by Environment name    
-            	# input.Environment.Name == "<environment-name>"    
-            	# Scope evaluation to Space Id    
-            	# input.Space.Id == "<space-id>"
-            	# Scope evaluation to multiple Spaces
-                # input.Project.Slug in ["<project-slug>", "<project-slug2>"]
-            # }
+
+            default evaluate := false
+
+            # Deployments that use Predeploy Boilerplate. Runbook runs don't use
+            # it. A project without it at all is Require Predeploy Gates' job.
+            evaluate if {
+                not input.Runbook
+                some step in input.Steps
+                step.Source.Type == "Process Template"
+                step.Source.SlugOrId == "predeploy-boilerplate"
+            }
             EOT
 }
