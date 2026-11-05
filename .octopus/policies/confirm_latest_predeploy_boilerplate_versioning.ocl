@@ -1,0 +1,51 @@
+name = "Confirm Latest Predeploy Boilerplate Versioning"
+description = "Check that a Process Template is of a minimum version when deploying"
+violation_action = "block"
+violation_reason = "The required process template version is not used"
+
+conditions {
+    rego = <<-EOT
+            package confirm_latest_predeploy_boilerplate_versioning
+            
+            # Default: Deny all deployments
+            default result := {"allowed": false}
+            
+            # Allow: Specific Process Template Version is present, active, and not skipped
+            result := {"allowed": true} if {
+            	some step in input.Steps
+            	
+            	# Ensure the step is derived from a Process Template
+            	step.Source.Type == "Process Template"
+            	
+            	# Target a specific template by its unique slug or I
+            	step.Source.SlugOrId == "<ProcessTemplate-slug>"
+            	
+            	# Verify the template version matches the required baseline exactly
+            	semver.compare(step.Source.Version, "<specific-version>") == 0
+            	
+            	# Ensure the required step is not in the deployment skip list
+            	not step.Id in input.SkippedSteps
+            	
+            	# Verify the step is currently enabled in the process
+            	step.Enabled == true
+            }
+            EOT
+}
+
+scope {
+    rego = <<-EOT
+            package confirm_latest_predeploy_boilerplate_versioning
+            
+            default evaluate := true
+            
+            # The following are examples of available scoping options:
+            # evaluate if {    
+            	# Scope evaluation by Environment name    
+            	# input.Environment.Name == "<environment-name>"    
+            	# Scope evaluation to Space Id    
+            	# input.Space.Id == "<space-id>"
+            	# Scope evaluation to multiple Spaces
+                # input.Project.Slug in ["<project-slug>", "<project-slug2>"]
+            # }
+            EOT
+}
