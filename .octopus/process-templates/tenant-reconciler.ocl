@@ -1,0 +1,472 @@
+name = "Tenant Reconciler"
+description = "Provisions tenants tagged for onboarding on every project that opts in: generates missing password values, starts each project's provisioning runbook, and moves the tenant to the active tag once everything is provisioned. Running it again changes nothing. Authenticates with a Generic OIDC account exchanged for a short-lived access token."
+
+icon {
+    color = "#2F93E0"
+    id = "sync"
+}
+
+parameter "Reconciler.OidcAccount" {
+    display_settings = {
+        Octopus.ControlType = "GenericOidcAccount"
+    }
+    help_text = "Generic OIDC account whose audience is the reconciler's service account ID. The service account needs to view projects, tenants, library variable sets, and tasks, edit tenants, and run the provisioning runbooks."
+    label = "OIDC account"
+}
+
+parameter "Reconciler.ServiceAccountId" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Service account ID (a GUID) used as the token exchange audience. Defaults to the OIDC account's audience."
+    label = "Service account ID"
+
+    value "#{Reconciler.OidcAccount.Audience}" {}
+}
+
+parameter "Reconciler.ServerUrl" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Base URL of the Octopus instance. Defaults to this instance."
+    label = "Octopus Server URL"
+
+    value "#{Octopus.Web.ServerUri}" {}
+}
+
+parameter "Reconciler.SpaceId" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "ID of the space to reconcile. Defaults to the current space."
+    label = "Space ID"
+
+    value "#{Octopus.Space.Id}" {}
+}
+
+parameter "Reconciler.ProjectTag" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Canonical project tag that opts a project in, such as `Tenant Provisioning/Enabled`. The project's provisioning runbook comes from its Ephemeral environments > Settings."
+    label = "Project opt-in tag"
+
+    value "Tenant Provisioning/Enabled" {}
+}
+
+parameter "Reconciler.OnboardingTag" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Canonical tenant tag for tenants to provision."
+    label = "Onboarding tenant tag"
+
+    value "Lifecycle/Onboarding" {}
+}
+
+parameter "Reconciler.ActiveTag" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Canonical tenant tag that replaces the onboarding tag once every connection is provisioned."
+    label = "Active tenant tag"
+
+    value "Lifecycle/Active" {}
+}
+
+parameter "Reconciler.VariableSet" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Library variable set that holds the password templates."
+    label = "Variable set"
+
+    value "Common Tenant Variables" {}
+}
+
+parameter "Reconciler.PasswordTemplates" {
+    display_settings = {
+        Octopus.ControlType = "MultiLineText"
+    }
+    help_text = "Sensitive common variable templates to fill per environment, separated by commas or new lines. Existing values are never changed."
+    label = "Password templates"
+
+    value "Project.Postgres.OwnerPassword, Project.Postgres.AppPassword" {}
+}
+
+parameter "Reconciler.RequiredTemplates" {
+    display_settings = {
+        Octopus.ControlType = "MultiLineText"
+    }
+    help_text = "Common variable templates a tenant must have a value for before anything runs, separated by commas or new lines. Without the abbreviation, provisioning could build untenanted names and reset their logins."
+    label = "Required templates"
+
+    value "Tenant.Abbreviation" {}
+}
+
+parameter "Reconciler.DryRun" {
+    display_settings = {
+        Octopus.ControlType = "Checkbox"
+    }
+    help_text = "Report what would change without writing values, starting runbooks, or changing tags."
+    label = "Dry run"
+
+    value "True" {}
+}
+
+parameter "Reconciler.Debug" {
+    display_settings = {
+        Octopus.ControlType = "Checkbox"
+    }
+    help_text = "Logs the OIDC token's iss, aud, and sub claims. Never logs the token itself."
+    label = "Debug OIDC claims"
+
+    value "False" {}
+}
+
+parameter "Reconciler.WorkerPool" {
+    display_settings = {
+        Octopus.ControlType = "WorkerPool"
+    }
+    help_text = "Worker pool that runs the reconciler."
+    label = "Worker pool"
+}
+
+parameter "Reconciler.ContainerFeed" {
+    display_settings = {
+        Octopus.ControlType = "Feed"
+    }
+    help_text = "Container feed for the execution container."
+    label = "Execution container feed"
+}
+
+parameter "Reconciler.ContainerImage" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Image with bash 4 or later, the octopus CLI (2.1.0 or later), curl, and jq."
+    label = "Execution container image"
+
+    value "octopusdeploy/worker-tools:6-ubuntu.24.04" {}
+}
+
+step "reconcile-tenants" {
+    name = "Reconcile tenants"
+
+    action {
+        action_type = "Octopus.Script"
+        properties = {
+            Octopus.Action.RunOnServer = "true"
+            Octopus.Action.Script.ScriptBody = <<-EOT
+                #!/usr/bin/env bash
+                # Reconciles tenants tagged for onboarding with the projects that opt in to
+                # tenant provisioning. For each tenant, project, and environment it:
+                #   1. Generates missing password values for the tenant (common variables).
+                #   2. Starts the project's provisioning runbook if no successful run exists.
+                #   3. Moves the tenant from the onboarding tag to the active tag once every
+                #      connection is provisioned.
+                # Running it again changes nothing. Provisioning runs aren't awaited: the next
+                # pass sees them succeed and moves the tag.
+                # Flow: OIDC account JWT -> token exchange -> access token -> REST API and octopus CLI.
+                set -euo pipefail
+                
+                # --- Local runs: no Octopus helpers. Parameters come from RECONCILE_<Name>
+                # environment variables (dots become underscores), and OCTOPUS_API_KEY
+                # replaces the OIDC exchange.
+                LOCAL_RUN=false
+                if ! declare -F get_octopusvariable >/dev/null; then
+                  LOCAL_RUN=true
+                  get_octopusvariable() { local n="RECONCILE_${1//./_}"; printf '%s' "${!n:-}"; }
+                  write_highlight() { echo "$*"; }
+                  write_warning() { echo "WARNING: $*" >&2; }
+                  set_octopusvariable() { :; }
+                fi
+                
+                v() { get_octopusvariable "Reconciler.$1" || true; }
+                lower() { tr '[:upper:]' '[:lower:]'; }
+                
+                SERVER_URL="$(v ServerUrl)"; SERVER_URL="${SERVER_URL%/}"
+                SERVICE_ACCOUNT_ID="$(v ServiceAccountId)"
+                JWT="$(v OidcAccount.OpenIdConnect.Jwt)"
+                SPACE_ID="$(v SpaceId)"
+                PROJECT_TAG="$(v ProjectTag)"
+                ONBOARDING_TAG="$(v OnboardingTag)"
+                ACTIVE_TAG="$(v ActiveTag)"
+                VARIABLE_SET="$(v VariableSet)"
+                PASSWORD_TEMPLATES="$(v PasswordTemplates)"
+                REQUIRED_TEMPLATES="$(v RequiredTemplates)"
+                DRY_RUN="$(v DryRun | lower)"
+                DEBUG="$(v Debug | lower)"
+                
+                fail() { write_highlight "**Tenant reconciler failed**: $1"; exit 1; }
+                say() { echo "$*"; }
+                dry() { [ "$DRY_RUN" = "true" ]; }
+                
+                # --- Validate inputs
+                for name in SERVER_URL SPACE_ID PROJECT_TAG ONBOARDING_TAG ACTIVE_TAG VARIABLE_SET; do
+                  [ -n "${!name}" ] || fail "\`${name}\` is empty."
+                done
+                command -v jq >/dev/null || fail "jq isn't installed in this image."
+                command -v octopus >/dev/null || fail "The octopus CLI isn't installed in this image."
+                dry && write_highlight "Dry run: reporting only. Nothing is written or started."
+                
+                # --- Authenticate
+                export OCTOPUS_URL="$SERVER_URL"
+                if [ "$LOCAL_RUN" = "true" ]; then
+                  [ -n "${OCTOPUS_API_KEY:-}" ] || fail "Local runs need OCTOPUS_API_KEY."
+                  AUTH_HEADER="X-Octopus-ApiKey: ${OCTOPUS_API_KEY}"
+                else
+                  for name in SERVICE_ACCOUNT_ID JWT; do
+                    [ -n "${!name}" ] || fail "\`${name}\` is empty. Check the OIDC account parameter."
+                  done
+                  if [ "$DEBUG" = "true" ]; then
+                    CLAIMS="$(echo "$JWT" | cut -d. -f2 | tr '_-' '/+' \
+                      | awk '{ while (length($0) % 4) $0 = $0 "="; print }' \
+                      | base64 -d 2>/dev/null | jq -c '{iss, aud, sub}' 2>/dev/null || true)"
+                    write_highlight "OIDC claims: \`${CLAIMS:-could not decode}\`"
+                  fi
+                  TOKEN_ENDPOINT="$(curl -sf "$SERVER_URL/.well-known/openid-configuration" | jq -r '.token_endpoint')" \
+                    || fail "Couldn't read $SERVER_URL/.well-known/openid-configuration."
+                  EXCHANGE_BODY="$(jq -n --arg aud "$SERVICE_ACCOUNT_ID" --arg jwt "$JWT" '{
+                    grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+                    audience: $aud,
+                    subject_token: $jwt,
+                    subject_token_type: "urn:ietf:params:oauth:token-type:jwt"
+                  }')"
+                  EXCHANGE_RESPONSE="$(curl -s -w '\n%{http_code}' -X POST "$TOKEN_ENDPOINT" \
+                    -H 'Content-Type: application/json' -d "$EXCHANGE_BODY")"
+                  EXCHANGE_STATUS="$(echo "$EXCHANGE_RESPONSE" | tail -n1)"
+                  ACCESS_TOKEN="$(echo "$EXCHANGE_RESPONSE" | sed '$d' | jq -r '.access_token // empty')"
+                  if [ "$EXCHANGE_STATUS" != "200" ] || [ -z "$ACCESS_TOKEN" ]; then
+                    echo "$EXCHANGE_RESPONSE" | sed '$d' | jq -r '.error_description // .error // .' || true
+                    fail "Token exchange returned HTTP ${EXCHANGE_STATUS}. Check the OIDC identity's issuer and subject on the service account."
+                  fi
+                  export OCTOPUS_ACCESS_TOKEN="$ACCESS_TOKEN"
+                  AUTH_HEADER="Authorization: Bearer ${ACCESS_TOKEN}"
+                  echo "Token exchange succeeded."
+                fi
+                
+                api() {
+                  curl -sS --fail-with-body -H "$AUTH_HEADER" "$SERVER_URL$1" \
+                    || fail "GET $1 failed."
+                }
+                api_put() {
+                  curl -sS --fail-with-body -X PUT -H "$AUTH_HEADER" -H 'Content-Type: application/json' \
+                    --data-binary @- "$SERVER_URL$1" >/dev/null
+                }
+                urlencode() { jq -rn --arg s "$1" '$s | @uri'; }
+                new_password() {
+                  # Letters and digits only, so the value is safe in connection strings,
+                  # JDBC URLs, and Helm --set arguments.
+                  LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32 || true
+                }
+                
+                # --- Opted-in projects and their provisioning runbooks
+                ENVIRONMENTS="$(api "/api/$SPACE_ID/environments/all")"
+                env_name() { echo "$ENVIRONMENTS" | jq -r --arg id "$1" 'first(.[] | select(.Id == $id) | .Name) // $id'; }
+                
+                PROJECTS_JSON="$(api "/api/$SPACE_ID/projects/all" | jq --arg tag "$PROJECT_TAG" '[.[]
+                  | select((.ProjectTags // []) | index($tag))
+                  | {Id, Name, Provision: .ProvisioningRunbookId, Deprovision: .DeprovisioningRunbookId,
+                     Git: ((.PersistenceSettings.ConversionState.RunbooksAreInGit // false) == true),
+                     Branch: (.PersistenceSettings.DefaultBranch // "main")}]')"
+                
+                OPTED=()
+                declare -A P_NAME P_RUNBOOK P_RUNBOOK_NAME P_DEPROVISION P_GITREF
+                while IFS=$'\t' read -r id name provision deprovision git branch; do
+                  [ -n "$id" ] || continue
+                  if [ -z "$provision" ] || [ "$provision" = "null" ]; then
+                    write_warning "$name has the \`$PROJECT_TAG\` tag but no provisioning runbook set (Ephemeral environments > Settings). Skipped."
+                    continue
+                  fi
+                  if [ "$git" = "true" ]; then
+                    gitref="refs/heads/$branch"
+                    rb_name="$(api "/api/$SPACE_ID/projects/$id/$(urlencode "$gitref")/runbooks/$provision" | jq -r '.Name')"
+                  else
+                    gitref=""
+                    rb_name="$(api "/api/$SPACE_ID/runbooks/$provision" | jq -r '.Name')"
+                  fi
+                  OPTED+=("$id")
+                  P_NAME[$id]="$name"; P_RUNBOOK[$id]="$provision"; P_RUNBOOK_NAME[$id]="$rb_name"
+                  P_DEPROVISION[$id]="$([ "$deprovision" = "null" ] && echo "" || echo "$deprovision")"
+                  P_GITREF[$id]="$gitref"
+                done < <(echo "$PROJECTS_JSON" | jq -r '.[] | [.Id, .Name, (.Provision // "null"), (.Deprovision // "null"), (.Git|tostring), .Branch] | @tsv')
+                
+                [ "${#OPTED[@]}" -gt 0 ] || { write_highlight "No projects have the \`$PROJECT_TAG\` tag. Nothing to do."; exit 0; }
+                say "Opted-in projects: $(for p in "${OPTED[@]}"; do printf '%s (%s), ' "${P_NAME[$p]}" "${P_RUNBOOK_NAME[$p]}"; done | sed 's/, $//')"
+                
+                # --- Password templates in the variable set
+                LVS="$(api "/api/$SPACE_ID/libraryvariablesets/all" | jq --arg n "$VARIABLE_SET" 'first(.[] | select(.Name == $n)) // empty')"
+                [ -n "$LVS" ] || fail "Library variable set \`$VARIABLE_SET\` not found."
+                LVS_ID="$(echo "$LVS" | jq -r '.Id')"
+                TEMPLATE_IDS=()
+                while IFS= read -r tname; do
+                  tname="$(echo "$tname" | sed 's/\r$//; s/^[[:space:]]*//; s/[[:space:]]*$//')"
+                  [ -n "$tname" ] || continue
+                  tid="$(echo "$LVS" | jq -r --arg n "$tname" 'first(.Templates[] | select(.Name == $n) | .Id) // empty')"
+                  [ -n "$tid" ] || fail "Template \`$tname\` not found in \`$VARIABLE_SET\`."
+                  TEMPLATE_IDS+=("$tid")
+                done <<< "$(echo "$PASSWORD_TEMPLATES" | tr ',' '\n')"
+                
+                # --- Provisioning state for one tenant, project, and environment
+                # Prints provisioned, pending, or missing.
+                run_state() {
+                  local tenant="$1" project="$2" env="$3" runbook="$4" deprovision="$5"
+                  local q="projects=$project&tenants=$tenant&environments=$env&take=1"
+                  local run state created
+                  run="$(api "/api/$SPACE_ID/runbookRuns?$q&runbooks=$runbook" | jq -c '.Items[0] // empty')"
+                  [ -n "$run" ] || { echo missing; return; }
+                  state="$(api "/api/tasks/$(echo "$run" | jq -r '.TaskId')" | jq -r '.State')"
+                  case "$state" in
+                    Queued|Executing|Cancelling) echo pending; return ;;
+                    Success) ;;
+                    *) echo missing; return ;;
+                  esac
+                  created="$(echo "$run" | jq -r '.Created')"
+                  if [ -n "$deprovision" ]; then
+                    local d dstate
+                    d="$(api "/api/$SPACE_ID/runbookRuns?$q&runbooks=$deprovision" | jq -c '.Items[0] // empty')"
+                    if [ -n "$d" ] && [[ "$(echo "$d" | jq -r '.Created')" > "$created" ]]; then
+                      dstate="$(api "/api/tasks/$(echo "$d" | jq -r '.TaskId')" | jq -r '.State')"
+                      [ "$dstate" = "Success" ] && { echo missing; return; }
+                    fi
+                  fi
+                  echo provisioned
+                }
+                
+                # --- Reconcile each onboarding tenant
+                TENANTS="$(api "/api/$SPACE_ID/tenants/all" | jq -c --arg tag "$ONBOARDING_TAG" '[.[] | select((.TenantTags // []) | index($tag))]')"
+                COUNT="$(echo "$TENANTS" | jq 'length')"
+                [ "$COUNT" -gt 0 ] || { write_highlight "No tenants have the \`$ONBOARDING_TAG\` tag. Nothing to do."; exit 0; }
+                say "Tenants with \`$ONBOARDING_TAG\`: $(echo "$TENANTS" | jq -r '[.[].Name] | join(", ")')"
+                
+                FAILURES=0; STARTED=0; ACTIVATED=0; PASSWORDS=0
+                
+                while IFS= read -r tenant; do
+                  tid="$(echo "$tenant" | jq -r '.Id')"; tname="$(echo "$tenant" | jq -r '.Name')"
+                  say ""
+                  say "=== $tname ($tid)"
+                  CV="$(api "/api/$SPACE_ID/tenants/$tid/commonvariables")"
+                
+                  # Required values, such as the abbreviation that names databases. Without
+                  # one, provisioning could build untenanted names and reset their logins.
+                  missing_required=""
+                  while IFS= read -r rname; do
+                    rname="$(echo "$rname" | sed 's/\r$//; s/^[[:space:]]*//; s/[[:space:]]*$//')"
+                    [ -n "$rname" ] || continue
+                    has="$(echo "$CV" | jq --arg n "$rname" '[.Variables[] | select(.Template.Name == $n)
+                      | select((.Value | type) == "string" and .Value != "" or ((.Value | type) == "object" and .Value.HasValue == true))] | length')"
+                    [ "$has" -gt 0 ] || missing_required+="$rname "
+                  done <<< "$(echo "$REQUIRED_TEMPLATES" | tr ',' '\n')"
+                  if [ -n "$missing_required" ]; then
+                    write_warning "$tname has no value for: ${missing_required% }. Set it on the tenant's Common Variables tab. Skipped."
+                    continue
+                  fi
+                
+                  # Connections to opted-in projects
+                  TARGETS=()
+                  for p in "${OPTED[@]}"; do
+                    while IFS= read -r e; do
+                      [ -n "$e" ] && TARGETS+=("$p|$e")
+                    done < <(echo "$tenant" | jq -r --arg p "$p" '.ProjectEnvironments[$p] // [] | .[]')
+                  done
+                  if [ "${#TARGETS[@]}" -eq 0 ]; then
+                    write_warning "$tname isn't connected to any project with the \`$PROJECT_TAG\` tag. Connect it, then the next pass provisions it."
+                    continue
+                  fi
+                  ENVS="$(printf '%s\n' "${TARGETS[@]}" | cut -d'|' -f2 | sort -u)"
+                
+                  # 1. Passwords: one value per template per environment, never rotated.
+                  NEW="[]"
+                  for env in $ENVS; do
+                    for tmpl in "${TEMPLATE_IDS[@]}"; do
+                      has="$(echo "$CV" | jq --arg t "$tmpl" --arg e "$env" '[.Variables[]
+                        | select(.TemplateId == $t and ((.Scope.EnvironmentIds // []) | index($e)) and .Value.HasValue == true)] | length')"
+                      [ "$has" -gt 0 ] && continue
+                      tlabel="$(echo "$LVS" | jq -r --arg t "$tmpl" 'first(.Templates[] | select(.Id == $t) | .Name)')"
+                      say "  Password missing: $tlabel in $(env_name "$env")"
+                      NEW="$(echo "$NEW" | jq --arg s "$LVS_ID" --arg t "$tmpl" --arg e "$env" --arg pw "$(new_password)" \
+                        '. + [{LibraryVariableSetId: $s, TemplateId: $t, Value: {HasValue: true, NewValue: $pw}, Scope: {EnvironmentIds: [$e]}}]')"
+                    done
+                  done
+                  n_new="$(echo "$NEW" | jq 'length')"
+                  if [ "$n_new" -gt 0 ]; then
+                    if dry; then
+                      say "  Would generate $n_new password value(s)."
+                    else
+                      if echo "$CV" | jq --argjson new "$NEW" '{TenantId, ConcurrencyToken, Variables: (.Variables + $new)}' \
+                          | api_put "/api/$SPACE_ID/tenants/$tid/commonvariables"; then
+                        say "  Generated $n_new password value(s)."
+                        PASSWORDS=$((PASSWORDS + n_new))
+                      else
+                        write_warning "Couldn't save passwords for $tname. Skipped this tenant."
+                        FAILURES=$((FAILURES + 1)); continue
+                      fi
+                    fi
+                  else
+                    say "  Passwords: all set."
+                  fi
+                
+                  # 2. Provisioning
+                  all_done=true
+                  for target in "${TARGETS[@]}"; do
+                    p="${target%%|*}"; env="${target#*|}"; ename="$(env_name "$env")"
+                    state="$(run_state "$tid" "$p" "$env" "${P_RUNBOOK[$p]}" "${P_DEPROVISION[$p]}")"
+                    case "$state" in
+                      provisioned) say "  ${P_NAME[$p]} / $ename: provisioned." ;;
+                      pending) say "  ${P_NAME[$p]} / $ename: provisioning is running."; all_done=false ;;
+                      missing)
+                        all_done=false
+                        if dry; then
+                          say "  ${P_NAME[$p]} / $ename: would run ${P_RUNBOOK_NAME[$p]}."
+                          continue
+                        fi
+                        ARGS=(runbook run --no-prompt --output-format basic --space "$SPACE_ID"
+                              --project "$p" --name "${P_RUNBOOK_NAME[$p]}" --environment "$ename" --tenant "$tname")
+                        [ -n "${P_GITREF[$p]}" ] && ARGS+=(--git-ref "${P_GITREF[$p]}")
+                        if TASK_ID="$(octopus "${ARGS[@]}" | grep -E '^ServerTasks-' | head -n1)" && [ -n "$TASK_ID" ]; then
+                          write_highlight "Started **${P_RUNBOOK_NAME[$p]}** for **$tname** in **$ename** (${P_NAME[$p]}): [$TASK_ID]($SERVER_URL/app#/$SPACE_ID/tasks/$TASK_ID)"
+                          STARTED=$((STARTED + 1))
+                        else
+                          write_warning "Couldn't start ${P_RUNBOOK_NAME[$p]} for $tname in $ename (${P_NAME[$p]})."
+                          FAILURES=$((FAILURES + 1))
+                        fi
+                        ;;
+                    esac
+                  done
+                
+                  # 3. Tag
+                  if [ "$all_done" = "true" ]; then
+                    if dry; then
+                      say "  Would move $tname from \`$ONBOARDING_TAG\` to \`$ACTIVE_TAG\`."
+                    elif api "/api/$SPACE_ID/tenants/$tid" \
+                        | jq --arg on "$ONBOARDING_TAG" --arg act "$ACTIVE_TAG" '.TenantTags = ((.TenantTags - [$on]) + [$act] | unique)' \
+                        | api_put "/api/$SPACE_ID/tenants/$tid"; then
+                      write_highlight "**$tname** is provisioned everywhere. Moved from \`$ONBOARDING_TAG\` to \`$ACTIVE_TAG\`."
+                      ACTIVATED=$((ACTIVATED + 1))
+                    else
+                      write_warning "Couldn't update tags on $tname."
+                      FAILURES=$((FAILURES + 1))
+                    fi
+                  else
+                    say "  Stays \`$ONBOARDING_TAG\` until every connection is provisioned. The next pass checks again."
+                  fi
+                done < <(echo "$TENANTS" | jq -c '.[]')
+                
+                say ""
+                write_highlight "Reconciled $COUNT tenant(s): $PASSWORDS password value(s) generated, $STARTED provisioning run(s) started, $ACTIVATED tenant(s) activated, $FAILURES failure(s)."
+                set_octopusvariable "Started" "$STARTED"
+                set_octopusvariable "Activated" "$ACTIVATED"
+                [ "$FAILURES" -eq 0 ] || fail "$FAILURES action(s) failed. See the warnings above."
+                EOT
+            Octopus.Action.Script.ScriptSource = "Inline"
+            Octopus.Action.Script.Syntax = "Bash"
+        }
+        worker_pool_variable = "#{Reconciler.WorkerPool}"
+
+        container {
+            feed = "#{Reconciler.ContainerFeed}"
+            image = "#{Reconciler.ContainerImage}"
+        }
+    }
+}
