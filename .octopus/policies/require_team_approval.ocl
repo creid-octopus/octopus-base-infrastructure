@@ -14,12 +14,10 @@ conditions {
             #
             # The "action" in the result overrides the policy's UI setting.
             # A project whose ProjectStatus tag is in blocking_statuses
-            # blocks. Everything else warns: Onboarding projects, projects
-            # with no ProjectStatus tag, and every project while the set is
-            # empty. Add "ProjectStatus/Active" once the Evaluations tab
-            # shows clean results.
+            # blocks. Everything else warns, including Onboarding projects
+            # and projects with no ProjectStatus tag.
 
-            blocking_statuses := set()
+            blocking_statuses := {"ProjectStatus/Active"}
 
             default action := "warn"
 
