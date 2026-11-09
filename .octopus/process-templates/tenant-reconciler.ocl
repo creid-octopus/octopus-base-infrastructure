@@ -1,5 +1,5 @@
 name = "Tenant Reconciler"
-description = "Provisions tenants tagged for onboarding on every project that opts in: generates missing password values, starts each project's provisioning runbook, and moves the tenant to the active tag once everything is provisioned. Running it again changes nothing. Authenticates with a Generic OIDC account exchanged for a short-lived access token."
+description = "Provisions tenants tagged for onboarding on every project that opts in. Each project names its runbooks in project variables. The template generates missing password values, starts each project's provisioning runbook, and moves the tenant to the active tag once everything is provisioned. Running it again changes nothing. Authenticates with a Generic OIDC account exchanged for a short-lived access token."
 
 icon {
     color = "#2F93E0"
@@ -48,10 +48,30 @@ parameter "Reconciler.ProjectTag" {
     display_settings = {
         Octopus.ControlType = "SingleLineText"
     }
-    help_text = "Canonical project tag that opts a project in, such as `Tenant Provisioning/Enabled`. The project's provisioning runbook comes from its Ephemeral environments > Settings."
+    help_text = "Canonical project tag that opts a project in, such as `Tenant Provisioning/Enabled`."
     label = "Project opt-in tag"
 
     value "Tenant Provisioning/Enabled" {}
+}
+
+parameter "Reconciler.ProvisionRunbookVariable" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Name of the project variable that names the project's provisioning runbook. Its unscoped value is the runbook's slug, name, or ID. A tagged project without it is skipped with a warning."
+    label = "Provisioning runbook variable"
+
+    value "Tenant.ProvisionRunbook" {}
+}
+
+parameter "Reconciler.DeprovisionRunbookVariable" {
+    display_settings = {
+        Octopus.ControlType = "SingleLineText"
+    }
+    help_text = "Name of the project variable that names the project's deprovisioning runbook. Optional. When set, a successful deprovision after the last provision means the tenant needs provisioning again."
+    label = "Deprovisioning runbook variable"
+
+    value "Tenant.DeprovisionRunbook" {}
 }
 
 parameter "Reconciler.OnboardingTag" {
@@ -165,7 +185,8 @@ step "reconcile-tenants" {
                 #   2. Starts the project's provisioning runbook if no successful run exists.
                 #   3. Moves the tenant from the onboarding tag to the active tag once every
                 #      connection is provisioned.
-                # Running it again changes nothing. Provisioning runs aren't awaited: the next
+                # Each project names its runbooks in project variables whose names are
+                # parameters. Running it again changes nothing. Provisioning runs aren't awaited: the next
                 # pass sees them succeed and moves the tag.
                 # Flow: OIDC account JWT -> token exchange -> access token -> REST API and octopus CLI.
                 set -euo pipefail
@@ -190,6 +211,8 @@ step "reconcile-tenants" {
                 JWT="$(v OidcAccount.OpenIdConnect.Jwt)"
                 SPACE_ID="$(v SpaceId)"
                 PROJECT_TAG="$(v ProjectTag)"
+                PROVISION_VARIABLE="$(v ProvisionRunbookVariable)"
+                DEPROVISION_VARIABLE="$(v DeprovisionRunbookVariable)"
                 ONBOARDING_TAG="$(v OnboardingTag)"
                 ACTIVE_TAG="$(v ActiveTag)"
                 VARIABLE_SET="$(v VariableSet)"
@@ -203,7 +226,7 @@ step "reconcile-tenants" {
                 dry() { [ "$DRY_RUN" = "true" ]; }
                 
                 # --- Validate inputs
-                for name in SERVER_URL SPACE_ID PROJECT_TAG ONBOARDING_TAG ACTIVE_TAG VARIABLE_SET; do
+                for name in SERVER_URL SPACE_ID PROJECT_TAG PROVISION_VARIABLE ONBOARDING_TAG ACTIVE_TAG VARIABLE_SET; do
                   [ -n "${!name}" ] || fail "\`${name}\` is empty."
                 done
                 command -v jq >/dev/null || fail "jq isn't installed in this image."
@@ -267,32 +290,67 @@ step "reconcile-tenants" {
                 
                 PROJECTS_JSON="$(api "/api/$SPACE_ID/projects/all" | jq --arg tag "$PROJECT_TAG" '[.[]
                   | select((.ProjectTags // []) | index($tag))
-                  | {Id, Name, Provision: .ProvisioningRunbookId, Deprovision: .DeprovisioningRunbookId,
-                     Git: ((.PersistenceSettings.ConversionState.RunbooksAreInGit // false) == true),
+                  | {Id, Name, VariableSetId,
+                     GitVariables: ((.PersistenceSettings.ConversionState.VariablesAreInGit // false) == true),
+                     GitRunbooks: ((.PersistenceSettings.ConversionState.RunbooksAreInGit // false) == true),
                      Branch: (.PersistenceSettings.DefaultBranch // "main")}]')"
+                
+                # The unscoped value of a project variable, or nothing.
+                project_variable() {
+                  echo "$1" | jq -r --arg n "$2" 'first(.Variables[]
+                    | select(.Name == $n and .IsSensitive != true and ((.Scope // {}) | length) == 0) | .Value) // empty'
+                }
+                # The runbook whose slug, name, or ID matches, as "Id<TAB>Name", or nothing.
+                find_runbook() {
+                  echo "$1" | jq -r --arg r "$2" 'first(.Items[] | select(.Slug == $r or .Name == $r or .Id == $r)
+                    | [.Id, .Name] | @tsv) // empty'
+                }
                 
                 OPTED=()
                 declare -A P_NAME P_RUNBOOK P_RUNBOOK_NAME P_DEPROVISION P_GITREF
-                while IFS=$'\t' read -r id name provision deprovision git branch; do
+                while IFS=$'\t' read -r id name varset gitvars gitrunbooks branch; do
                   [ -n "$id" ] || continue
-                  if [ -z "$provision" ] || [ "$provision" = "null" ]; then
-                    write_warning "$name has the \`$PROJECT_TAG\` tag but no provisioning runbook set (Ephemeral environments > Settings). Skipped."
+                  gitref="refs/heads/$branch"
+                  if [ "$gitvars" = "true" ]; then
+                    VARS="$(api "/api/$SPACE_ID/projects/$id/$(urlencode "$gitref")/variables")"
+                  else
+                    VARS="$(api "/api/$SPACE_ID/variables/$varset")"
+                  fi
+                  if [ "$gitrunbooks" = "true" ]; then
+                    RUNBOOKS="$(api "/api/$SPACE_ID/projects/$id/$(urlencode "$gitref")/runbooks?take=1000")"
+                  else
+                    RUNBOOKS="$(api "/api/$SPACE_ID/projects/$id/runbooks?take=1000")"
+                    gitref=""
+                  fi
+                
+                  provision="$(project_variable "$VARS" "$PROVISION_VARIABLE")"
+                  if [ -z "$provision" ]; then
+                    write_warning "$name has the \`$PROJECT_TAG\` tag but no unscoped \`$PROVISION_VARIABLE\` project variable. Set it to the provisioning runbook's slug or name. Skipped."
                     continue
                   fi
-                  if [ "$git" = "true" ]; then
-                    gitref="refs/heads/$branch"
-                    rb_name="$(api "/api/$SPACE_ID/projects/$id/$(urlencode "$gitref")/runbooks/$provision" | jq -r '.Name')"
-                  else
-                    gitref=""
-                    rb_name="$(api "/api/$SPACE_ID/runbooks/$provision" | jq -r '.Name')"
+                  found="$(find_runbook "$RUNBOOKS" "$provision")"
+                  if [ -z "$found" ]; then
+                    write_warning "$name: \`$PROVISION_VARIABLE\` is \`$provision\`, which doesn't match a runbook slug, name, or ID. Skipped."
+                    continue
                   fi
-                  OPTED+=("$id")
-                  P_NAME[$id]="$name"; P_RUNBOOK[$id]="$provision"; P_RUNBOOK_NAME[$id]="$rb_name"
-                  P_DEPROVISION[$id]="$([ "$deprovision" = "null" ] && echo "" || echo "$deprovision")"
-                  P_GITREF[$id]="$gitref"
-                done < <(echo "$PROJECTS_JSON" | jq -r '.[] | [.Id, .Name, (.Provision // "null"), (.Deprovision // "null"), (.Git|tostring), .Branch] | @tsv')
                 
-                [ "${#OPTED[@]}" -gt 0 ] || { write_highlight "No projects have the \`$PROJECT_TAG\` tag. Nothing to do."; exit 0; }
+                  deprovision_id=""
+                  deprovision="$(project_variable "$VARS" "$DEPROVISION_VARIABLE")"
+                  if [ -n "$deprovision" ]; then
+                    dfound="$(find_runbook "$RUNBOOKS" "$deprovision")"
+                    if [ -n "$dfound" ]; then
+                      deprovision_id="${dfound%%$'\t'*}"
+                    else
+                      write_warning "$name: \`$DEPROVISION_VARIABLE\` is \`$deprovision\`, which doesn't match a runbook. Deprovisioning won't be detected."
+                    fi
+                  fi
+                
+                  OPTED+=("$id")
+                  P_NAME[$id]="$name"; P_RUNBOOK[$id]="${found%%$'\t'*}"; P_RUNBOOK_NAME[$id]="${found#*$'\t'}"
+                  P_DEPROVISION[$id]="$deprovision_id"; P_GITREF[$id]="$gitref"
+                done < <(echo "$PROJECTS_JSON" | jq -r '.[] | [.Id, .Name, .VariableSetId, (.GitVariables|tostring), (.GitRunbooks|tostring), .Branch] | @tsv')
+                
+                [ "${#OPTED[@]}" -gt 0 ] || { write_highlight "No project with the \`$PROJECT_TAG\` tag names a usable provisioning runbook. Nothing to do."; exit 0; }
                 say "Opted-in projects: $(for p in "${OPTED[@]}"; do printf '%s (%s), ' "${P_NAME[$p]}" "${P_RUNBOOK_NAME[$p]}"; done | sed 's/, $//')"
                 
                 # --- Password templates in the variable set
