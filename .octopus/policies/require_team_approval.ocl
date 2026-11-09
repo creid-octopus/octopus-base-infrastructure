@@ -1,0 +1,72 @@
+name = "Require Team Approval"
+description = "Checks that deployments to shared environments are owned by a team and covered by an approval rule. Ownership is the project's TeamOwner tag. Approval comes from an Octopus Approvals rule, which sets RequiresApproval in the policy input. The Rego result sets the action, so a project's ProjectStatus tag decides whether a violation warns or blocks."
+violation_action = "warn"
+violation_reason = "Deployments to a shared environment need a `TeamOwner` project tag and an approval rule for that team."
+
+conditions {
+    rego = <<-EOT
+            package require_team_approval
+
+            # Approval rules are per team and live in Octopus Approvals, not in
+            # code. This policy doesn't name any rule. It checks that the
+            # project has an owning team and that some rule matched
+            # (RequiresApproval), so a team without a rule gets a warning.
+            #
+            # The "action" in the result overrides the policy's UI setting.
+            # A project whose ProjectStatus tag is in blocking_statuses
+            # blocks. Everything else warns: Onboarding projects, projects
+            # with no ProjectStatus tag, and every project while the set is
+            # empty. Add "ProjectStatus/Active" once the Evaluations tab
+            # shows clean results.
+
+            blocking_statuses := set()
+
+            default action := "warn"
+
+            action := "block" if {
+                some tag in input.Project.Tags
+                tag in blocking_statuses
+            }
+
+            default result := {"allowed": true}
+
+            owners := [trim_prefix(tag, "TeamOwner/") |
+                some tag in input.Project.Tags
+                startswith(tag, "TeamOwner/")
+            ]
+
+            # No owning team, so no rule can match.
+            result := {
+                "allowed": false,
+                "action": action,
+                "reason": sprintf("%s has no `TeamOwner` tag, so no team signs off on its deploys to %s, a shared environment. Tag the project with the team that owns it.", [input.Project.Name, input.Environment.Name]),
+            } if {
+                count(owners) == 0
+            }
+
+            # An owning team, but no approval rule matched.
+            result := {
+                "allowed": false,
+                "action": action,
+                "reason": sprintf("%s owns %s, but no approval rule covers it in %s, a shared environment. Other teams can deploy it here without %s's sign-off. To add one, ask a space manager for an approval rule on `TeamOwner/%s`.", [owners[0], input.Project.Name, input.Environment.Name, owners[0], owners[0]]),
+            } if {
+                count(owners) > 0
+                not input.RequiresApproval
+            }
+            EOT
+}
+
+scope {
+    rego = <<-EOT
+            package require_team_approval
+
+            default evaluate := false
+
+            # Deployments to shared environments only. Development, Production,
+            # and ephemeral pr-<n> environments aren't tagged Shared.
+            evaluate if {
+                not input.Runbook
+                "EnvironmentUsage/Shared" in input.Environment.Tags
+            }
+            EOT
+}
