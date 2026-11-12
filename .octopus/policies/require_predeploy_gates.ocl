@@ -1,5 +1,5 @@
 name = "Require Predeploy Gates"
-description = "Checks that every deployment runs the Predeploy Boilerplate process template with its gates in place: Calculate Deployment Mode always runs, and the rollback and AI-assisted review pauses are enabled and not skipped."
+description = "Checks that every deployment to Production or a shared environment (Test) runs the Predeploy Boilerplate process template with its gates in place: Calculate Deployment Mode always runs, and the rollback and AI-assisted review pauses are enabled and not skipped."
 violation_action = "warn"
 violation_reason = "Deployments must run the `Predeploy Boilerplate` process template, version 2 or later, with its gates enabled and not skipped."
 
@@ -64,9 +64,20 @@ scope {
 
             default evaluate := false
 
-            # Deployments only. Runbook runs have no deployment mode.
+            # Deployments to the higher environments: Production, and shared
+            # environments such as Test. That's where rollbacks and AI-assisted
+            # releases need their pauses. Development stays quiet, so a
+            # developer working on a new pipeline isn't warned about the
+            # boilerplate on the first deploy. Runbook runs have no deployment
+            # mode.
             evaluate if {
                 not input.Runbook
+                "Meta-Environment/Production" in input.Environment.Tags
+            }
+
+            evaluate if {
+                not input.Runbook
+                "EnvironmentUsage/Shared" in input.Environment.Tags
             }
             EOT
 }
