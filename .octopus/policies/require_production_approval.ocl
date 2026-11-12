@@ -1,0 +1,59 @@
+name = "Require Production Approval"
+description = "Checks that every deployment and runbook run in a Production environment is gated by an approval. Octopus sets RequiresApproval in the policy input when an Octopus Approvals rule matches, and the field is also meant to cover ITSM change approvals, so the check doesn't depend on which tool approves. The Rego result sets the action, so a project's ProjectStatus tag can decide whether a violation warns or blocks."
+violation_action = "warn"
+violation_reason = "Deployments and runbook runs in Production must be gated by an approval."
+
+conditions {
+    rego = <<-EOT
+            package require_production_approval
+
+            # RequiresApproval is true when an approval rule matched the project,
+            # environment, and tenant. It's an explicit false when none did.
+            # This policy doesn't name any rule, so a new approval route (an
+            # ITSM change request, say) passes without a change here.
+            #
+            # The "action" in the result overrides the policy's UI setting.
+            # A project whose ProjectStatus tag is in blocking_statuses
+            # blocks. Everything else warns. The set is empty, so every
+            # violation warns. Add "ProjectStatus/Active" once the Evaluations
+            # tab shows clean results.
+
+            blocking_statuses := set()
+
+            default action := "warn"
+
+            action := "block" if {
+                some tag in input.Project.Tags
+                tag in blocking_statuses
+            }
+
+            default kind := "deployment"
+
+            kind := "runbook run" if input.Runbook
+
+            result := {"allowed": true} if input.RequiresApproval == true
+
+            # A missing field counts as no approval, so the check fails safe.
+            # A default rule can't hold a sprintf, so this is a second rule
+            # that can't be true at the same time as the one above.
+            result := {
+                "allowed": false,
+                "action": action,
+                "reason": sprintf("This %s of %s to %s has no approval gating it. Production changes need a recorded approval before they run. To add one, ask a space manager for an approval rule that covers this project in Production. Rule `Production Release Approval` matches projects tagged `Change Approvals/ProductionOnly`.", [kind, input.Project.Name, input.Environment.Name]),
+            } if not input.RequiresApproval == true
+            EOT
+}
+
+scope {
+    rego = <<-EOT
+            package require_production_approval
+
+            default evaluate := false
+
+            # Deployments and runbook runs in environments tagged Production.
+            # Ephemeral pr-<n> environments carry no tags.
+            evaluate if {
+                "Meta-Environment/Production" in input.Environment.Tags
+            }
+            EOT
+}
