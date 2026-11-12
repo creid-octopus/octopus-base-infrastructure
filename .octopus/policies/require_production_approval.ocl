@@ -39,7 +39,7 @@ conditions {
             result := {
                 "allowed": false,
                 "action": action,
-                "reason": sprintf("This %s of %s to %s has no approval gating it. Production changes need a recorded approval before they run. To add one, ask a space manager for an approval rule that covers this project in Production. Rule `Production Release Approval` matches projects tagged `Change Approvals/ProductionOnly`.", [kind, input.Project.Name, input.Environment.Name]),
+                "reason": sprintf("This %s of %s to %s has no approval gating it. Production changes need a recorded approval before they run. Approval is gated by a project tag: tag the project `Change Approvals/ProductionOnly` and the `Production Release Approval` rule will require an approval before it runs. If the project already has that tag, ask a space manager to check the rule.", [kind, input.Project.Name, input.Environment.Name]),
             } if not input.RequiresApproval == true
             EOT
 }
