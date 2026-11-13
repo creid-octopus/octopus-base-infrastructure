@@ -1,5 +1,5 @@
 name = "Require Team Approval"
-description = "Checks that deployments to shared environments are owned by a team and covered by an approval rule. Ownership is the project's TeamOwner tag. Approval comes from an Octopus Approvals rule, which sets RequiresApproval in the policy input. The Rego result sets the action, so a project's ProjectStatus tag decides whether a violation warns or blocks."
+description = "Checks that deployments to shared environments are owned by a team and covered by an approval rule. Ownership is the project's TeamOwner tag. Approval comes from an Octopus Approvals rule, which sets RequiresApproval in the policy input. The policy is advisory: every violation warns. The Rego result sets the action, so a ProjectStatus tag in blocking_statuses can turn that into a block later."
 violation_action = "warn"
 violation_reason = "Deployments to a shared environment need a `TeamOwner` project tag and an approval rule for that team."
 
@@ -12,12 +12,16 @@ conditions {
             # project has an owning team and that some rule matched
             # (RequiresApproval), so a team without a rule gets a warning.
             #
+            # This policy is advisory. Teams should know they can require an
+            # approval, not that they must, and the platform team communicates
+            # the options. So every violation warns.
+            #
             # The "action" in the result overrides the policy's UI setting.
             # A project whose ProjectStatus tag is in blocking_statuses
-            # blocks. Everything else warns, including Onboarding projects
-            # and projects with no ProjectStatus tag.
+            # would block, so the switch is ready if that ever changes. Add
+            # "ProjectStatus/Active" to turn it on. The set is empty on purpose.
 
-            blocking_statuses := {"ProjectStatus/Active"}
+            blocking_statuses := set()
 
             default action := "warn"
 
