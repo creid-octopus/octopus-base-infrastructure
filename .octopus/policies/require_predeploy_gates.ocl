@@ -1,7 +1,7 @@
 name = "Require Predeploy Gates"
-description = "Checks that every deployment to Production or a shared environment (Test) runs the Predeploy Boilerplate process template with its gates in place: Calculate Deployment Mode always runs, and the rollback and AI-assisted review pauses are enabled and not skipped."
+description = "Checks that every deployment to Production or a shared environment (Test) runs the Predeploy Boilerplate process template with its gates in place: Calculate Deployment Mode always runs, and the rollback and AI-assisted review pauses are enabled and not skipped. The step must also be named Predeploy Boilerplate (slug predeploy-boilerplate), because other steps refer to it by name."
 violation_action = "warn"
-violation_reason = "Deployments must run the `Predeploy Boilerplate` process template, version 2 or later, with its gates enabled and not skipped."
+violation_reason = "Deployments must run the `Predeploy Boilerplate` process template, version 2 or later, named `Predeploy Boilerplate`, with its gates enabled and not skipped."
 
 conditions {
     rego = <<-EOT
@@ -19,7 +19,13 @@ conditions {
                 "reason": "Run the Predeploy Boilerplate process template (version 2 or later). Keep Calculate Deployment Mode, Confirm rollback, and Confirm AI-assisted release enabled, and don't skip them.",
             }
 
-            result := {"allowed": true} if {
+            # Two ways to fail, with different reasons. The default result above
+            # covers missing or weakened gates. The second result below covers
+            # a boilerplate whose gates are fine but whose step has the wrong
+            # name. A default rule can't hold a sprintf, so the naming reason
+            # is its own rule, and it can't be true together with the pass.
+
+            gates_in_place if {
                 count(mode_steps) > 0
                 count(rollback_steps) > 0
                 count(ai_review_steps) > 0
@@ -32,6 +38,32 @@ conditions {
                 every step in mode_steps {
                     step.IsConditional == false
                 }
+            }
+
+            # Other steps refer to the boilerplate by name, such as the
+            # rollback expression on Postgres.Review.Policy, which reads
+            # Octopus.Action[Predeploy Boilerplate-Calculate Deployment Mode].
+            # A different name stops that expression matching, so a rollback
+            # stops pausing at the DBA review and nothing reports it. The input
+            # has the step slug and no display name, so the slug stands in for
+            # the name. Expanded step ids start with the step slug.
+            named_correctly if {
+                every step in boilerplate_steps {
+                    startswith(step.Id, "predeploy-boilerplate-")
+                }
+            }
+
+            result := {"allowed": true} if {
+                gates_in_place
+                named_correctly
+            }
+
+            result := {
+                "allowed": false,
+                "reason": sprintf("The Predeploy Boilerplate step has the slug `%s`. Name it `Predeploy Boilerplate`, with the slug `predeploy-boilerplate`. Other steps refer to it by name, such as the rollback expression on Postgres.Review.Policy, so any other name stops a rollback pausing at the DBA review.", [trim_suffix(mode_steps[0].Id, "-calculate-deployment-mode")]),
+            } if {
+                gates_in_place
+                not named_correctly
             }
 
             boilerplate_steps := [step |
