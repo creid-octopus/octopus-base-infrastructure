@@ -1,5 +1,5 @@
 name = "Require Production Approval"
-description = "Checks that every deployment and runbook run in a Production environment is gated by an approval. Octopus sets RequiresApproval in the policy input when an Octopus Approvals rule matches, and the field is also meant to cover ITSM change approvals, so the check doesn't depend on which tool approves. The Rego result sets the action, so a project's ProjectStatus tag can decide whether a violation warns or blocks."
+description = "Checks that every deployment and runbook run in a Production environment is gated by an approval. Octopus sets RequiresApproval in the policy input when an Octopus Approvals rule matches, and the field is also meant to cover ITSM change approvals, so the check doesn't depend on which tool approves. The Rego result sets the action: an Active project blocks, and any other project warns."
 violation_action = "warn"
 violation_reason = "Deployments and runbook runs in Production must be gated by an approval."
 
@@ -14,11 +14,12 @@ conditions {
             #
             # The "action" in the result overrides the policy's UI setting.
             # A project whose ProjectStatus tag is in blocking_statuses
-            # blocks. Everything else warns. The set is empty, so every
-            # violation warns. Add "ProjectStatus/Active" once the Evaluations
-            # tab shows clean results.
+            # blocks. Everything else warns: Onboarding projects, and projects
+            # with no ProjectStatus tag. An approval before Production is a
+            # baseline control, so Active projects block. The fix is always
+            # the tag in the failure reason.
 
-            blocking_statuses := set()
+            blocking_statuses := {"ProjectStatus/Active"}
 
             default action := "warn"
 
