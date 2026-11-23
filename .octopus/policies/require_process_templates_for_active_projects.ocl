@@ -1,0 +1,45 @@
+name = "Require Process Templates for Active Projects"
+description = "Checks that every step in a deployment or runbook run of a project tagged ProjectStatus/Active comes from a process template. Onboarding projects and projects with no ProjectStatus tag aren't checked."
+violation_action = "warn"
+violation_reason = "Every step in an Active project's deployments and runbooks must come from a process template."
+
+conditions {
+    rego = <<-EOT
+            package require_process_templates_for_active_projects
+
+            # A step that isn't from a process template is one defined directly
+            # in the project. The step's Source says where it came from. Use
+            # object.get so a step with no Source counts as not from a template.
+
+            default result := {
+                "allowed": false,
+                "reason": "Every step in an Active project's deployments and runbooks must come from a process template. Replace the project's own steps with process templates.",
+            }
+
+            result := {"allowed": true} if count(non_template_steps) == 0
+
+            result := {
+                "allowed": false,
+                "reason": sprintf("%s is tagged `ProjectStatus/Active`, so every step must come from a process template. These steps don't: %s.", [input.Project.Name, concat(", ", non_template_steps)]),
+            } if count(non_template_steps) > 0
+
+            non_template_steps := {step.Id |
+                some step in input.Steps
+                object.get(object.get(step, "Source", {}), "Type", "") != "Process Template"
+            }
+            EOT
+}
+
+scope {
+    rego = <<-EOT
+            package require_process_templates_for_active_projects
+
+            default evaluate := false
+
+            # Deployments and runbook runs of Active projects. Runbooks can
+            # use process templates too, so both are checked.
+            evaluate if {
+                "ProjectStatus/Active" in input.Project.Tags
+            }
+            EOT
+}
