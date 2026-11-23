@@ -12,6 +12,11 @@ process_template "notification-predeploy" {
     }
 }
 
+slot "slot-predeploy" {
+    name = "Slot - Predeploy"
+    description = "Used to manage predeployment steps - third party reach out/coordination, status steps, etc."
+}
+
 process_template "create-namespace" {
     name = "Create Namespace"
     process_template_slug = "kubectl-create-namespace"
@@ -58,6 +63,11 @@ process_template "deploy-yaml" {
     parameter "KubernetesYaml.DeploymentImage" {
         value = "Kubernetes.YAML.Package"
     }
+}
+
+slot "slot-postdeploy" {
+    name = "Slot - PostDeploy"
+    description = "Post deployment slot - used for additional testing/manual YAML drops, etc."
 }
 
 process_template "notification-postdeploy" {
